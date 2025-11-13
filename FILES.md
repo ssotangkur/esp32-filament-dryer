@@ -91,9 +91,3 @@ During the build, `target_add_binary_data(${COMPONENT_LIB} "www/index.html" TEXT
 ### Tailwind CSS Experimentation
 
 The web dashboard uses Tailwind CSS's browser version, which processes utility classes on-the-fly in the browser rather than requiring a build step. This was chosen as an experiment to see if modern CSS frameworks could work well in embedded contexts where traditional build pipelines aren't practical. The browser version eliminates the need for Node.js build processes, processes only the classes actually used in the HTML (keeping runtime overhead minimal), and provides the full Tailwind utility class system. The experiment proved successful - you can build modern, responsive UIs with Tailwind's utility classes directly in embedded web applications, with all CSS processing happening client-side.
-
-### Future Features
-
-- Warning/Error logging via toast popup
-- Variable tracking
-
