@@ -13,11 +13,15 @@ if %ERRORLEVEL% NEQ 0 (
     exit /b 1
 )
 
-echo Updating version.json...
-python scripts\update_version.py
-
 echo Copying firmware binary to expected location...
 copy build\esp32_filament_dryer.bin build\esp32s3\firmware.bin
+if %ERRORLEVEL% NEQ 0 (
+    echo Failed to copy firmware binary
+    exit /b 1
+)
+
+echo Updating version.json...
+python scripts\update_version.py
 
 echo Build completed successfully!
 echo Firmware is ready at build\esp32s3\firmware.bin
