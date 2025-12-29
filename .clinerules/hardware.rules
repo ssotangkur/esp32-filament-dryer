@@ -1,0 +1,50 @@
+# Hardware Configuration Rules
+
+## Target Hardware: LilyGo T-Display S3
+
+This project is developed for the LilyGo T-Display S3 development board.
+
+### Key Specifications:
+- **Microcontroller**: ESP32-S3R8 (Dual-core Xtensa LX7, up to 240MHz)
+- **Display**: 1.9-inch TFT LCD (170x320 resolution, ST7789V driver)
+- **Touch**: No touchscreen
+- **Battery**: LiPo battery connector with charging circuit (supports up to 3.7V/1000mAh)
+- **USB**: USB-C for programming and power supply
+- **Buttons**: Power button, Reset button
+- **LED**: RGB LED indicator
+- **Sensors**: Optional BMA423 3-axis accelerometer (I2C interface)
+- **Memory**: 8MB PSRAM, 16MB Flash
+- **Wireless**: Wi-Fi 802.11 b/g/n, Bluetooth 5.0 LE
+
+### Pin Configuration (from product_pins.h):
+- **Power**: GPIO 15 (BOARD_POWERON)
+- **Display**:
+  - Backlight: GPIO 38 (BOARD_TFT_BL)
+  - Data bus: GPIO 39-48 (BOARD_TFT_DATA0-7)
+  - Reset: GPIO 5 (BOARD_TFT_RST)
+  - Chip Select: GPIO 6 (BOARD_TFT_CS)
+  - Data/Command: GPIO 7 (BOARD_TFT_DC)
+  - Write: GPIO 8 (BOARD_TFT_WR)
+  - Read: GPIO 9 (BOARD_TFT_RD)
+- **I2C**: SCL GPIO 17, SDA GPIO 18
+- **Touch**:
+  - Interrupt: GPIO 16 (BOARD_TOUCH_IRQ)
+  - Reset: GPIO 21 (BOARD_TOUCH_RST)
+
+### Display Configuration:
+- Resolution: 170x320 pixels
+- Driver: ST7789V
+- Interface: 8-bit parallel
+- Buffer size: 170x100 pixels (partial buffering)
+
+### Important Notes:
+- This board variant does not include touchscreen functionality
+- Uses partial display buffering to conserve memory
+- ESP32-S3 supports high-speed interfaces suitable for the parallel display bus
+- Ensure proper power management when using battery operation
+
+### Development Considerations:
+- Use the defined pin macros from `include/product_pins.h` for hardware access
+- The display component `esp_lcd_st7735` is configured for ST7789V compatibility
+- Consider memory constraints when designing graphics-heavy applications
+- Touch-related pins (BOARD_TOUCH_IRQ, BOARD_TOUCH_RST) are not connected on this variant

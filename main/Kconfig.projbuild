@@ -1,0 +1,10 @@
+menu "Application Configuration"
+
+    config ENABLE_SYSMON
+        bool "Enable SysMon system monitoring"
+        default y
+        help
+            Enable the SysMon component for system monitoring and task stack tracking.
+            When disabled, sysmon initialization and task registration will be skipped.
+
+endmenu
