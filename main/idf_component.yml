@@ -6,7 +6,7 @@ dependencies:
   lvgl/lvgl: "^8"
   espressif/esp_lvgl_port: "^2.0.0"
   ssotangkur/sysmon:
-    version: "*"
+    version: "c59a93a3296e8c56699cb8c87aeff0bfcf5cc8d4"
     git: https://github.com/ssotangkur/sysmon.git
   # # Put list of dependencies here
   # # For components maintained by Espressif:

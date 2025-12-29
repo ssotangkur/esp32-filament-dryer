@@ -25,7 +25,7 @@ dependencies:
       type: service
     version: 8.4.0
   ssotangkur/sysmon:
-    component_hash: aa2931befbb50e426f0e21fea2cbd4845b524bc2e7bc8b6ed9ea0087a76b2045
+    component_hash: bfcc23fe4bac6d255b655e337a9052a0f1bf6223f41d88aec3a4fc02d6d7df0a
     dependencies:
     - name: idf
       version: '>=4.4'
@@ -33,12 +33,12 @@ dependencies:
       git: https://github.com/ssotangkur/sysmon.git
       path: .
       type: git
-    version: 7757767142a40c1bc817dab6647c12afa3227314
+    version: c59a93a3296e8c56699cb8c87aeff0bfcf5cc8d4
 direct_dependencies:
 - espressif/esp_lvgl_port
 - idf
 - lvgl/lvgl
 - ssotangkur/sysmon
-manifest_hash: 486f12f959d67becafce587e2296598c113d70ed01d55785a7b0ce940df43ce9
+manifest_hash: 71576f42e0c36f5a7152e5f41be9d171972d47d2ab0a819768ffa02d4980821b
 target: esp32s3
 version: 2.0.0
