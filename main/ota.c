@@ -494,8 +494,8 @@ bool ota_check_for_update(const char *ota_base_url)
   ESP_LOGI(TAG, "Current firmware version: %s", FIRMWARE_VERSION);
   ESP_LOGI(TAG, "Available firmware version: %s", version_start);
 
-  // Compare versions (simple string comparison - assumes semantic versioning)
-  bool update_available = (strcmp(FIRMWARE_VERSION, version_start) != 0);
+  // Compare versions using semantic versioning
+  bool update_available = is_version_newer(FIRMWARE_VERSION, version_start);
 
   if (update_available)
   {
