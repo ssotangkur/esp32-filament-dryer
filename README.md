@@ -166,8 +166,16 @@ This project supports OTA firmware updates for wireless updates without physical
 
 ### Using OTA Updates
 
-The device includes an OTA API that can be called programmatically:
+The device automatically checks for OTA updates every 5 seconds after startup and installs them when available. The OTA system can also be controlled programmatically:
 
+#### Automatic Updates
+The firmware automatically:
+- Checks for updates every 5 seconds after WiFi connection
+- Downloads and installs new firmware versions when found
+- Logs all OTA activities to the console
+- Waits 30 seconds after update attempts before checking again
+
+#### Manual OTA Control
 ```c
 #include "ota.h"
 #include "wifi_credentials.h"
