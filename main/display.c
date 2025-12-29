@@ -14,6 +14,7 @@
 #include "diagnostic.h"
 #include "display.h"
 #include "temp.h"
+#include "version.h"
 
 // FPS display variables
 static lv_obj_t *fps_label = NULL;
@@ -296,10 +297,10 @@ void lvgl_demo(void)
   lv_label_set_text(info_label, "ESP32-S3 + LilyGo T-Display");
   lv_obj_set_pos(info_label, 10, 160); // Centered horizontally, below button
 
-  /* Create a counter label - positioned lower on the tall display */
-  lv_obj_t *counter_label = lv_label_create(lv_scr_act());
-  lv_label_set_text(counter_label, "Counter: 0");
-  lv_obj_set_pos(counter_label, 10, 200); // Further down on the 320-pixel tall display
+  /* Create a firmware version label - positioned lower on the tall display */
+  lv_obj_t *version_label = lv_label_create(lv_scr_act());
+  lv_label_set_text(version_label, "FW: " FIRMWARE_VERSION_STRING);
+  lv_obj_set_pos(version_label, 10, 200); // Further down on the 320-pixel tall display
 
   /* Create temperature display label */
   temp_label = lv_label_create(lv_scr_act());
