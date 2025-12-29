@@ -248,7 +248,56 @@ This project includes a simple Node.js HTTP server for local development:
 
 #### Option 2: External Hosting
 
-Host the `firmware.bin` file on any HTTP/HTTPS server and update the `OTA_URL` accordingly.
+Host the `firmware.bin` file on any HTTP/HTTPS server. For OTA update checking to work, the server must provide a `/version` endpoint that returns version information in JSON format.
+
+**Required Server Endpoints:**
+
+1. **Firmware Download**: `GET /firmware.bin`
+   - Returns the firmware binary file
+   - Must include proper HTTP headers for binary content
+
+2. **Version Information**: `GET /version`
+   - Returns JSON with version metadata
+   - Required format:
+   ```json
+   {
+     "version": "1.0.2",
+     "build_date": "2025-12-29",
+     "git_commit": "46ba299",
+     "description": "Firmware description"
+   }
+   ```
+
+**Example Server Implementation (Node.js/Express):**
+```javascript
+const express = require('express');
+const app = express();
+
+// Serve firmware binary
+app.get('/firmware.bin', (req, res) => {
+  res.sendFile('/path/to/firmware.bin');
+});
+
+// Serve version information
+app.get('/version', (req, res) => {
+  res.json({
+    "version": "1.0.2",
+    "build_date": "2025-12-29",
+    "git_commit": "46ba299",
+    "description": "ESP32 filament dryer firmware"
+  });
+});
+
+app.listen(3000);
+```
+
+**OTA URL Configuration:**
+Update your `wifi_credentials.h` with the base URL:
+```c
+#define OTA_URL "https://your-server.com/firmware.bin"
+```
+
+The firmware will automatically check `https://your-server.com/version` to determine if an update is available before downloading.
 
 ### OTA Partition Layout
 
