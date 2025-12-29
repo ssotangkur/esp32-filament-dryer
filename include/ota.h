@@ -19,7 +19,7 @@ esp_err_t ota_init(void);
  *
  * This function starts a background task that checks for firmware updates
  * every 5 seconds and automatically installs them when available.
- * Should be called after WiFi connection is established.
+ * Must be called after ota_init() and after WiFi connection is established.
  *
  * @return ESP_OK on success, or an error code on failure
  */
