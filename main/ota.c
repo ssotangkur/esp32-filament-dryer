@@ -518,3 +518,42 @@ int ota_get_progress(void)
   xSemaphoreGive(ota_mutex);
   return progress;
 }
+
+// Periodic OTA checking task
+static void ota_check_task(void *pvParameter)
+{
+  ESP_LOGI(TAG, "OTA check task started - checking for updates every 5 seconds");
+
+  while (1)
+  {
+    // Check for OTA updates
+    if (ota_check_for_update(OTA_URL))
+    {
+      ESP_LOGI(TAG, "New firmware version available! Starting update...");
+      ota_update_from_url(OTA_URL);
+
+      // Wait a bit before checking again after an update attempt
+      vTaskDelay(pdMS_TO_TICKS(30000)); // 30 seconds
+    }
+    else
+    {
+      ESP_LOGD(TAG, "Firmware is up to date");
+    }
+
+    // Wait 5 seconds before next check
+    vTaskDelay(pdMS_TO_TICKS(5000));
+  }
+}
+
+esp_err_t ota_start_auto_check(void)
+{
+  // Start periodic OTA checking task (checks every 5 seconds)
+  if (xTaskCreate(&ota_check_task, "ota_check_task", 4096, NULL, 5, NULL) != pdPASS)
+  {
+    ESP_LOGE(TAG, "Failed to create OTA check task");
+    return ESP_ERR_NO_MEM;
+  }
+
+  ESP_LOGI(TAG, "Automatic OTA checking started");
+  return ESP_OK;
+}

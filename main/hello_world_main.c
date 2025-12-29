@@ -6,7 +6,6 @@
 
 #include <sdkconfig.h>
 #include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
 #include "esp_system.h"
 #include "startup_tests.h"
 #include "display.h"
@@ -15,35 +14,6 @@
 #include "ota.h"
 #include <sysmon.h>
 #include <sysmon_stack.h>
-#include "esp_log.h"
-
-static const char *TAG = "MAIN";
-
-// Periodic OTA checking task
-static void ota_check_task(void *pvParameter)
-{
-    ESP_LOGI(TAG, "OTA check task started - checking for updates every 5 seconds");
-
-    while (1)
-    {
-        // Check for OTA updates
-        if (ota_check_for_update(OTA_URL))
-        {
-            ESP_LOGI(TAG, "New firmware version available! Starting update...");
-            ota_update_from_url(OTA_URL);
-
-            // Wait a bit before checking again after an update attempt
-            vTaskDelay(pdMS_TO_TICKS(30000)); // 30 seconds
-        }
-        else
-        {
-            ESP_LOGD(TAG, "Firmware is up to date");
-        }
-
-        // Wait 5 seconds before next check
-        vTaskDelay(pdMS_TO_TICKS(5000));
-    }
-}
 
 void app_main(void)
 {
@@ -59,8 +29,8 @@ void app_main(void)
     // Initialize OTA functionality
     ESP_ERROR_CHECK(ota_init());
 
-    // Start periodic OTA checking task (checks every 5 seconds)
-    xTaskCreate(&ota_check_task, "ota_check_task", 4096, NULL, 5, NULL);
+    // Start automatic periodic OTA checking (checks every 5 seconds)
+    ESP_ERROR_CHECK(ota_start_auto_check());
 
     // Initialize system monitor after WiFi is connected
 #ifdef CONFIG_ENABLE_SYSMON

@@ -7,12 +7,23 @@
 /**
  * @brief Initialize OTA update functionality
  *
- * This function sets up the OTA update mechanism and starts a task
- * to periodically check for firmware updates.
+ * This function sets up the OTA update mechanism including mutexes
+ * and rollback protection. Call this once during system initialization.
  *
  * @return ESP_OK on success, or an error code on failure
  */
 esp_err_t ota_init(void);
+
+/**
+ * @brief Start automatic periodic OTA checking
+ *
+ * This function starts a background task that checks for firmware updates
+ * every 5 seconds and automatically installs them when available.
+ * Should be called after WiFi connection is established.
+ *
+ * @return ESP_OK on success, or an error code on failure
+ */
+esp_err_t ota_start_auto_check(void);
 
 /**
  * @brief Start an OTA update from a given HTTPS URL
