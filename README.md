@@ -23,6 +23,24 @@ An ESP32-based filament dryer project using the LilyGo T-Display S3 board.
 - ESP-IDF development environment
 - Visual Studio Code with ESP-IDF extension
 - LilyGo T-Display S3 board
+- Python 3.x (for version management scripts)
+
+### Building with Automatic Version Increment
+
+This project includes automatic patch version incrementing for each build:
+
+```bash
+# Recommended: Use the automated build script (increments version + builds + updates metadata)
+scripts\build_with_version_increment.bat
+
+# Manual version increment
+python scripts\increment_version.py
+
+# Manual build (traditional way)
+esp_idf_shell.bat idf.py build
+```
+
+Each time you run the automated build script, the patch version automatically increments (1.0.1 → 1.0.2 → 1.0.3, etc.), ensuring every build has a unique version number for reliable OTA updates.
 
 ### WiFi Credentials Setup
 
