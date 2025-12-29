@@ -7,7 +7,7 @@ if %ERRORLEVEL% NEQ 0 (
 )
 
 echo Building firmware...
-esp_idf_shell.bat idf.py build
+call esp_idf_shell.bat idf.py build
 if %ERRORLEVEL% NEQ 0 (
     echo Build failed
     exit /b 1
@@ -15,6 +15,9 @@ if %ERRORLEVEL% NEQ 0 (
 
 echo Updating version.json...
 python scripts\update_version.py
+
+echo Copying firmware binary to expected location...
+copy build\esp32_filament_dryer.bin build\esp32s3\firmware.bin
 
 echo Build completed successfully!
 echo Firmware is ready at build\esp32s3\firmware.bin

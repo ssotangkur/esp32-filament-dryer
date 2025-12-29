@@ -4,6 +4,7 @@
 #include "esp_ota_ops.h"
 #include "esp_http_client.h"
 #include "esp_https_ota.h"
+#include "esp_lvgl_port.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
@@ -53,6 +54,10 @@ static void ota_task(void *pvParameter)
 
   ESP_LOGI(TAG, "Starting OTA update from: %s", url);
 
+  // Stop LVGL to prevent display crashes during OTA
+  ESP_LOGI(TAG, "Stopping LVGL during OTA update");
+  lvgl_port_stop();
+
   xSemaphoreTake(ota_mutex, portMAX_DELAY);
   ota_in_progress = true;
   ota_progress = 0;
@@ -83,6 +88,7 @@ static void ota_task(void *pvParameter)
   else
   {
     ESP_LOGE(TAG, "OTA update failed: %s", esp_err_to_name(ret));
+    lvgl_port_resume(); // Resume LVGL on error
   }
 
   vTaskDelete(NULL);
@@ -94,6 +100,10 @@ static void ota_https_task(void *pvParameter)
 
   ESP_LOGI(TAG, "Starting HTTPS OTA update from: %s", url);
 
+  // Stop LVGL to prevent display crashes during OTA
+  ESP_LOGI(TAG, "Stopping LVGL during OTA update");
+  lvgl_port_stop();
+
   xSemaphoreTake(ota_mutex, portMAX_DELAY);
   ota_in_progress = true;
   ota_progress = 0;
@@ -124,6 +134,7 @@ static void ota_https_task(void *pvParameter)
   else
   {
     ESP_LOGE(TAG, "OTA update failed: %s", esp_err_to_name(ret));
+    lvgl_port_resume(); // Resume LVGL on error
   }
 
   vTaskDelete(NULL);
@@ -134,6 +145,10 @@ static void ota_http_task(void *pvParameter)
   char *url = (char *)pvParameter;
 
   ESP_LOGI(TAG, "Starting HTTP OTA update from: %s", url);
+
+  // Stop LVGL to prevent display crashes during OTA
+  ESP_LOGI(TAG, "Stopping LVGL during OTA update");
+  lvgl_port_stop();
 
   xSemaphoreTake(ota_mutex, portMAX_DELAY);
   ota_in_progress = true;
@@ -149,6 +164,7 @@ static void ota_http_task(void *pvParameter)
   if (client == NULL)
   {
     ESP_LOGE(TAG, "Failed to initialize HTTP client");
+    lvgl_port_resume(); // Resume LVGL on error
     xSemaphoreTake(ota_mutex, portMAX_DELAY);
     ota_in_progress = false;
     ota_progress = -1;
@@ -162,6 +178,7 @@ static void ota_http_task(void *pvParameter)
   {
     ESP_LOGE(TAG, "Failed to open HTTP connection: %s", esp_err_to_name(err));
     esp_http_client_cleanup(client);
+    lvgl_port_resume(); // Resume LVGL on error
     xSemaphoreTake(ota_mutex, portMAX_DELAY);
     ota_in_progress = false;
     ota_progress = -1;
@@ -175,6 +192,7 @@ static void ota_http_task(void *pvParameter)
   {
     ESP_LOGE(TAG, "Failed to get content length");
     esp_http_client_cleanup(client);
+    lvgl_port_resume(); // Resume LVGL on error
     xSemaphoreTake(ota_mutex, portMAX_DELAY);
     ota_in_progress = false;
     ota_progress = -1;
@@ -190,6 +208,7 @@ static void ota_http_task(void *pvParameter)
   {
     ESP_LOGE(TAG, "esp_ota_begin failed: %s", esp_err_to_name(err));
     esp_http_client_cleanup(client);
+    lvgl_port_resume(); // Resume LVGL on error
     xSemaphoreTake(ota_mutex, portMAX_DELAY);
     ota_in_progress = false;
     ota_progress = -1;
@@ -209,6 +228,7 @@ static void ota_http_task(void *pvParameter)
     ESP_LOGE(TAG, "Failed to allocate buffer");
     esp_ota_abort(ota_handle);
     esp_http_client_cleanup(client);
+    lvgl_port_resume(); // Resume LVGL on error
     xSemaphoreTake(ota_mutex, portMAX_DELAY);
     ota_in_progress = false;
     ota_progress = -1;
@@ -285,6 +305,7 @@ static void ota_http_task(void *pvParameter)
   {
     esp_ota_abort(ota_handle);
     ESP_LOGE(TAG, "OTA update failed");
+    lvgl_port_resume(); // Resume LVGL on failure
   }
 
   xSemaphoreTake(ota_mutex, portMAX_DELAY);
@@ -531,9 +552,6 @@ static void ota_check_task(void *pvParameter)
     {
       ESP_LOGI(TAG, "New firmware version available! Starting update...");
       ota_update_from_url(OTA_URL);
-
-      // Wait a bit before checking again after an update attempt
-      vTaskDelay(pdMS_TO_TICKS(30000)); // 30 seconds
     }
     else
     {
@@ -541,7 +559,7 @@ static void ota_check_task(void *pvParameter)
     }
 
     // Wait 5 seconds before next check
-    vTaskDelay(pdMS_TO_TICKS(5000));
+    vTaskDelay(pdMS_TO_TICKS(30000));
   }
 }
 
