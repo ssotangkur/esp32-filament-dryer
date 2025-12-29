@@ -96,8 +96,62 @@ esp_idf_shell.bat idf.py build flash monitor
 
 - `include/` - Header files
 - `main/` - Source files and main application logic
-- `example/` - Example configurations
+- `scripts/` - Build and version management scripts
+- `build/esp32s3/` - Build artifacts and metadata
+  - `firmware.bin` - Compiled firmware binary
+  - `version.json` - Build metadata and version information
 - `managed_components/` - ESP-IDF managed components
+
+## Build Information and Versioning
+
+This project captures comprehensive build metadata for traceability and debugging:
+
+### Build Metadata Locations
+
+**1. Version JSON File** (`build/esp32s3/version.json`):
+```json
+{
+  "version": "1.0.2",
+  "build_date": "2025-12-29",
+  "git_commit": "46ba299",
+  "git_version": "1.0.0",
+  "description": "ESP32 filament dryer firmware with improved versioning",
+  "target": "esp32s3"
+}
+```
+
+**2. CMake-Generated Header** (`build/include/version.h`):
+```c
+#define GIT_COMMIT "46ba299"
+#define BUILD_DATE "2025-12-29"
+#define FIRMWARE_VERSION_STRING "1.0.2"
+```
+
+### Version Information Access
+
+The firmware includes runtime access to version information:
+
+```c
+#include "version.h"
+
+// Get current version as string
+const char* version = get_firmware_version_string(); // "1.0.2"
+
+// Get detailed build information
+firmware_info_t info = get_firmware_info();
+// info.git_commit = "46ba299"
+// info.build_date = "2025-12-29"
+// info.target = "esp32s3"
+```
+
+### Automatic Version Increment
+
+Each build automatically increments the patch version:
+- **Build 1**: `1.0.1`
+- **Build 2**: `1.0.2`
+- **Build 3**: `1.0.3`
+
+This ensures every firmware binary has a unique version number for reliable OTA updates.
 
 ## Over-the-Air (OTA) Updates
 
