@@ -39,3 +39,10 @@ CONFIG_LV_USE_DEMO_WIDGETS=y
 CONFIG_LV_USE_DEMO_BENCHMARK=y
 CONFIG_LV_USE_DEMO_STRESS=y
 CONFIG_LV_USE_DEMO_MUSIC=y
+
+# OTA Configuration
+CONFIG_OTA_TASK_STACK_SIZE=8192
+# Rollback protection (auto-rollback on failure) - enabled for development safety
+CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y
+# Anti-rollback (prevents downgrades) - disabled for development flexibility
+# CONFIG_BOOTLOADER_APP_ANTI_ROLLBACK=y

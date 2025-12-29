@@ -1,0 +1,16 @@
+{
+  "name": "esp32-ota-server",
+  "version": "1.0.0",
+  "description": "Simple HTTP server for ESP32 OTA firmware updates",
+  "main": "ota-server.js",
+  "scripts": {
+    "serve": "node ota-server.js",
+    "dev": "node ota-server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  },
+  "keywords": ["esp32", "ota", "firmware", "server"],
+  "author": "",
+  "license": "MIT"
+}

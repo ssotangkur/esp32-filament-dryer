@@ -38,6 +38,7 @@ This project requires WiFi credentials to connect to your network. Credentials a
    ```c
    #define WIFI_SSID "YOUR_ACTUAL_WIFI_SSID"
    #define WIFI_PASSWORD "YOUR_ACTUAL_WIFI_PASSWORD"
+   #define OTA_URL "http://YOUR_LOCAL_SERVER_IP/firmware.bin"
    ```
 
 3. **Important Notes:**
@@ -80,11 +81,116 @@ esp_idf_shell.bat idf.py build flash monitor
 - `example/` - Example configurations
 - `managed_components/` - ESP-IDF managed components
 
+## Over-the-Air (OTA) Updates
+
+This project supports OTA firmware updates for wireless updates without physical access to the device.
+
+### OTA Features
+
+- **Automatic rollback protection**: Failed updates automatically rollback to the previous working version
+- **HTTPS support**: Secure firmware downloads
+- **Progress tracking**: Monitor update progress programmatically
+- **Non-blocking**: Updates run in background tasks
+
+### Using OTA Updates
+
+The device includes an OTA API that can be called programmatically:
+
+```c
+#include "ota.h"
+#include "wifi_credentials.h"
+
+// Initialize OTA (called automatically in app_main)
+ota_init();
+
+// Check if an update is available before downloading
+if (ota_check_for_update(OTA_URL)) {
+    printf("Update available! Current version: %s\n", FIRMWARE_VERSION);
+
+    // Start the update
+    ota_update_from_url(OTA_URL);
+} else {
+    printf("Firmware is up to date\n");
+}
+
+// Or update directly without checking (old behavior)
+ota_update_from_url(OTA_URL);
+
+// Or use specific functions for HTTP (local network) or HTTPS (internet)
+ota_update_from_http_url("http://192.168.1.100/firmware.bin");
+ota_update_from_https_url("https://example.com/firmware.bin");
+
+// Check update status
+if (ota_is_updating()) {
+    int progress = ota_get_progress();
+    printf("OTA progress: %d%%\n", progress);
+}
+```
+
+### Building OTA Firmware
+
+To create an OTA-compatible firmware binary:
+
+1. **Build the project:**
+   ```bash
+   esp_idf_shell.bat idf.py build
+   ```
+
+2. **The firmware binary will be created at:**
+   `build/esp32s3/firmware.bin`
+
+### Hosting OTA Firmware
+
+#### Option 1: Local Development Server (Recommended)
+
+This project includes a simple Node.js HTTP server for local development:
+
+1. **Install dependencies:**
+   ```bash
+   cd ota-server
+   npm install
+   cd ..
+   ```
+
+2. **Start the OTA server:**
+   ```bash
+   cd ota-server
+   npm run serve
+   ```
+   Or directly:
+   ```bash
+   node ota-server.js
+   ```
+
+3. **The server will automatically detect and display your local IP address and the complete OTA URL.** Copy the URL shown in the terminal output to your `wifi_credentials.h`:
+   ```c
+   #define OTA_URL "http://192.168.X.X:3001/firmware.bin"
+   ```
+
+4. **Server features:**
+   - Serves firmware.bin from your ESP32 build directory
+   - Provides version info via `/version` endpoint (reads current version.json)
+   - Provides status endpoint at `/status`
+   - Includes CORS headers for React/Vite integration
+   - Web interface at root URL with setup instructions
+
+#### Option 2: External Hosting
+
+Host the `firmware.bin` file on any HTTP/HTTPS server and update the `OTA_URL` accordingly.
+
+### OTA Partition Layout
+
+The partition table includes:
+- `factory`: Initial firmware partition
+- `ota_0` & `ota_1`: Alternating update partitions
+- `ota_data`: Stores which partition is active
+
 ## Development
 
 - Use `esp_idf_shell.bat` prefix for all ESP-IDF commands
 - Credentials are separated into `include/wifi_credentials.h` (gitignored)
 - Template provided at `include/wifi_credentials.h.template`
+- OTA functionality is automatically initialized after WiFi connection
 
 ## License
 

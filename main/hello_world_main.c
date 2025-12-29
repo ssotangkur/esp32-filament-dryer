@@ -11,6 +11,7 @@
 #include "display.h"
 #include "diagnostic.h"
 #include "wifi.h"
+#include "ota.h"
 #include <sysmon.h>
 #include <sysmon_stack.h>
 
@@ -24,6 +25,13 @@ void app_main(void)
     ESP_ERROR_CHECK(wifi_init());
     ESP_ERROR_CHECK(wifi_connect());
     ESP_ERROR_CHECK(wifi_wait_for_connection());
+
+    // Initialize OTA functionality
+    ESP_ERROR_CHECK(ota_init());
+    if (ota_check_for_update(OTA_URL))
+    {
+        ota_update_from_url(OTA_URL);
+    }
 
     // Initialize system monitor after WiFi is connected
 #ifdef CONFIG_ENABLE_SYSMON
