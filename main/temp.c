@@ -16,13 +16,14 @@ static const char *TAG = "TEMP";
 #define TEMP_TASK_STACK_SIZE 2048
 #define TEMP_TASK_PRIORITY 2
 #define TEMP_READ_INTERVAL_MS 1000 // Read temperature every second
+#define TEMP_AVERAGE_SAMPLES 100   // Number of ADC samples to average for noise reduction
 
 // Thermistor constants (adjust these for your specific thermistor)
-#define THERMISTOR_NOMINAL_RESISTANCE 10000.0 // Resistance at 25°C (10kΩ typical)
-#define THERMISTOR_NOMINAL_TEMPERATURE 25.0   // Temperature for nominal resistance
-#define THERMISTOR_BETA_COEFFICIENT 3950.0    // Beta coefficient (3950K typical)
-#define SERIES_RESISTOR 10000.0               // Series resistor value (10kΩ typical)
-#define ADC_VOLTAGE_REFERENCE 3.3             // ADC reference voltage
+#define THERMISTOR_NOMINAL_RESISTANCE 100000.0 // Resistance at 25°C (10kΩ typical)
+#define THERMISTOR_NOMINAL_TEMPERATURE 25.0    // Temperature for nominal resistance
+#define THERMISTOR_BETA_COEFFICIENT 3950.0     // Beta coefficient (3950K typical)
+#define SERIES_RESISTOR 100000.0               // Series resistor value (10kΩ typical)
+#define ADC_VOLTAGE_REFERENCE 3.3              // ADC reference voltage
 
 // Temperature sample structure
 typedef struct
@@ -82,13 +83,40 @@ static TaskHandle_t temp_task_handle = NULL;
  */
 static void temp_task(void *pvParameters)
 {
+  // Allocate buffer for ADC averaging in PSRAM
+  uint16_t *adc_samples = (uint16_t *)heap_caps_malloc(TEMP_AVERAGE_SAMPLES * sizeof(uint16_t), MALLOC_CAP_SPIRAM);
+  if (adc_samples == NULL)
+  {
+    ESP_LOGE(TAG, "Failed to allocate ADC averaging buffer in PSRAM");
+    vTaskDelete(NULL);
+    return;
+  }
+
   while (1)
   {
-    // Read temperature from ADC
-    int adc_reading = adc1_get_raw(ADC1_CHANNEL_0);
+    // Take multiple ADC samples and average them to reduce noise
+    uint32_t adc_sum = 0;
+    uint16_t valid_samples = 0;
+
+    for (int i = 0; i < TEMP_AVERAGE_SAMPLES; i++)
+    {
+      int adc_reading = adc1_get_raw(ADC1_CHANNEL_0);
+      if (adc_reading >= 0 && adc_reading <= 4095)
+      {
+        adc_samples[valid_samples] = (uint16_t)adc_reading;
+        adc_sum += adc_reading;
+        valid_samples++;
+      }
+
+      // Small delay between samples to allow ADC stabilization
+      vTaskDelay(pdMS_TO_TICKS(1));
+    }
+
+    // Calculate average ADC reading
+    float avg_adc_reading = (valid_samples > 0) ? (float)adc_sum / valid_samples : 0.0f;
 
     // Convert ADC reading to voltage
-    float voltage = (adc_reading / 4095.0f) * ADC_VOLTAGE_REFERENCE;
+    float voltage = (avg_adc_reading / 4095.0f) * ADC_VOLTAGE_REFERENCE;
 
     // Calculate temperature using Steinhart-Hart equation for thermistor
     float temperature = calculate_thermistor_temperature(voltage);
@@ -96,9 +124,14 @@ static void temp_task(void *pvParameters)
     // Check for invalid readings
     if (temperature < -50.0f || temperature > 150.0f)
     {
-      ESP_LOGW(TAG, "Invalid temperature reading: %.2f°C (ADC: %d, Voltage: %.3fV)",
-               temperature, adc_reading, voltage);
+      ESP_LOGW(TAG, "Invalid temperature reading: %.2f°C (Avg ADC: %.1f, Voltage: %.3fV, Samples: %d)",
+               temperature, avg_adc_reading, voltage, valid_samples);
       temperature = -999.0f; // Mark as invalid
+    }
+    else
+    {
+      ESP_LOGD(TAG, "Temperature: %.2f°C (Avg ADC: %.1f, Voltage: %.3fV, Samples: %d)",
+               temperature, avg_adc_reading, voltage, valid_samples);
     }
 
     // Store sample in circular buffer
@@ -132,6 +165,7 @@ void temp_sensor_init(void)
   ESP_LOGI(TAG, "Thermistor: %.0fΩ @ %.0f°C, Beta=%.0fK, Series R=%.0fΩ",
            THERMISTOR_NOMINAL_RESISTANCE, THERMISTOR_NOMINAL_TEMPERATURE,
            THERMISTOR_BETA_COEFFICIENT, SERIES_RESISTOR);
+  ESP_LOGI(TAG, "ADC averaging: %d samples for noise reduction", TEMP_AVERAGE_SAMPLES);
 
   // Configure ADC1 channel 0 (GPIO1)
   adc1_config_width(ADC_WIDTH_BIT_12);
@@ -272,3 +306,5 @@ void temp_sensor_deinit(void)
 
   ESP_LOGI(TAG, "Temperature sensor deinitialized");
 }
+
+// Note: ADC averaging buffer is freed by the task itself when it exits
