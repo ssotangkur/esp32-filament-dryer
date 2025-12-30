@@ -82,9 +82,9 @@ bool circular_buffer_is_full(circular_buffer_t *cb);
 void circular_buffer_clear(circular_buffer_t *cb);
 
 /**
- * @brief Deinitialize a circular buffer (free resources)
+ * @brief Free a circular buffer (free resources)
  * @param cb Pointer to circular_buffer_t structure
  */
-void circular_buffer_deinit(circular_buffer_t *cb);
+void circular_buffer_free(circular_buffer_t *cb);
 
 #endif // CIRCULAR_BUFFER_H

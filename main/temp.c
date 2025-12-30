@@ -208,7 +208,7 @@ void temp_sensor_init(void)
   if (result != pdPASS)
   {
     ESP_LOGE(TAG, "Failed to create temperature task");
-    circular_buffer_deinit(&temp_buffer_1);
+    circular_buffer_free(&temp_buffer_1);
     return;
   }
 
@@ -258,7 +258,7 @@ void temp_sensor_deinit(void)
     temp_task_handle = NULL;
   }
 
-  circular_buffer_deinit(&temp_buffer_1);
+  circular_buffer_free(&temp_buffer_1);
 
   ESP_LOGI(TAG, "Temperature sensor deinitialized");
 }
