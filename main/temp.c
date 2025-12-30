@@ -9,6 +9,7 @@
 #include "esp_heap_caps.h"
 #include "driver/adc.h"
 #include "sysmon_wrapper.h"
+#include "circular_buffer.h"
 
 static const char *TAG = "TEMP";
 
@@ -32,174 +33,15 @@ typedef struct
   uint32_t timestamp;
 } temp_sample_t;
 
-// Temperature buffer structure for managing circular buffers
-typedef struct
-{
-  temp_sample_t *buffer;
-  size_t buffer_size;
-  size_t head;
-  size_t count;
-  SemaphoreHandle_t mutex;
-} temp_buffer_t;
-
 // Parameters for temperature reading task
 typedef struct
 {
   adc1_channel_t adc_channel;
-  temp_buffer_t *buffer;
+  circular_buffer_t *buffer;
 } temp_task_params_t;
 
-/**
- * @brief Initialize a temperature buffer
- * @param buffer Pointer to temp_buffer_t structure
- * @param buffer_size Size of the circular buffer
- * @return ESP_OK on success, ESP_ERR_NO_MEM on failure
- */
-static esp_err_t temp_buffer_init(temp_buffer_t *buffer, size_t buffer_size)
-{
-  buffer->buffer = (temp_sample_t *)heap_caps_malloc(buffer_size * sizeof(temp_sample_t), MALLOC_CAP_SPIRAM);
-  if (buffer->buffer == NULL)
-  {
-    ESP_LOGE(TAG, "Failed to allocate temperature buffer in PSRAM");
-    return ESP_ERR_NO_MEM;
-  }
-
-  memset(buffer->buffer, 0, buffer_size * sizeof(temp_sample_t));
-  buffer->buffer_size = buffer_size;
-  buffer->head = 0;
-  buffer->count = 0;
-
-  buffer->mutex = xSemaphoreCreateMutex();
-  if (buffer->mutex == NULL)
-  {
-    ESP_LOGE(TAG, "Failed to create buffer mutex");
-    heap_caps_free(buffer->buffer);
-    buffer->buffer = NULL;
-    return ESP_ERR_NO_MEM;
-  }
-
-  return ESP_OK;
-}
-
-/**
- * @brief Record a temperature reading in the circular buffer
- * @param buffer Pointer to temp_buffer_t structure
- * @param temperature Temperature value to record
- */
-static void temp_buffer_record_reading(temp_buffer_t *buffer, float temperature)
-{
-  if (buffer->mutex == NULL || buffer->buffer == NULL)
-  {
-    return;
-  }
-
-  if (xSemaphoreTake(buffer->mutex, portMAX_DELAY) == pdTRUE)
-  {
-    buffer->buffer[buffer->head].temperature = temperature;
-    buffer->buffer[buffer->head].timestamp = xTaskGetTickCount() * portTICK_PERIOD_MS;
-
-    buffer->head = (buffer->head + 1) % buffer->buffer_size;
-
-    if (buffer->count < buffer->buffer_size)
-    {
-      buffer->count++;
-    }
-
-    ESP_LOGD(TAG, "Recorded temperature: %.2f°C (buffer count: %d)", temperature, buffer->count);
-    xSemaphoreGive(buffer->mutex);
-  }
-}
-
-/**
- * @brief Get the most recent temperature reading from buffer
- * @param buffer Pointer to temp_buffer_t structure
- * @return Latest temperature in Celsius, or -999.0f if no samples available
- */
-static float temp_buffer_get_reading(temp_buffer_t *buffer)
-{
-  float temperature = -999.0f;
-
-  if (buffer->mutex != NULL && xSemaphoreTake(buffer->mutex, portMAX_DELAY) == pdTRUE)
-  {
-    if (buffer->count > 0)
-    {
-      // Get the most recent sample (head - 1, wrapping around)
-      size_t latest_index = (buffer->head + buffer->buffer_size - 1) % buffer->buffer_size;
-      temperature = buffer->buffer[latest_index].temperature;
-    }
-    xSemaphoreGive(buffer->mutex);
-  }
-
-  return temperature;
-}
-
-/**
- * @brief Get temperature sample at specific index from buffer
- * @param buffer Pointer to temp_buffer_t structure
- * @param index Sample index (0 = oldest, buffer_count-1 = newest)
- * @return Temperature value, or -999.0f if invalid index
- */
-static float temp_buffer_get_sample(temp_buffer_t *buffer, size_t index)
-{
-  float temperature = -999.0f;
-
-  if (buffer->mutex != NULL && xSemaphoreTake(buffer->mutex, portMAX_DELAY) == pdTRUE)
-  {
-    if (index < buffer->count)
-    {
-      // Calculate buffer index (head - buffer_count + index, wrapping around)
-      size_t buffer_index = (buffer->head + buffer->buffer_size - buffer->count + index) % buffer->buffer_size;
-      temperature = buffer->buffer[buffer_index].temperature;
-    }
-    xSemaphoreGive(buffer->mutex);
-  }
-
-  return temperature;
-}
-
-/**
- * @brief Get number of stored temperature samples in buffer
- * @param buffer Pointer to temp_buffer_t structure
- * @return Number of valid samples
- */
-static size_t temp_buffer_get_sample_count(temp_buffer_t *buffer)
-{
-  size_t count = 0;
-
-  if (buffer->mutex != NULL && xSemaphoreTake(buffer->mutex, portMAX_DELAY) == pdTRUE)
-  {
-    count = buffer->count;
-    xSemaphoreGive(buffer->mutex);
-  }
-
-  return count;
-}
-
-/**
- * @brief Deinitialize a temperature buffer
- * @param buffer Pointer to temp_buffer_t structure
- */
-static void temp_buffer_deinit(temp_buffer_t *buffer)
-{
-  if (buffer->mutex != NULL)
-  {
-    vSemaphoreDelete(buffer->mutex);
-    buffer->mutex = NULL;
-  }
-
-  if (buffer->buffer != NULL)
-  {
-    heap_caps_free(buffer->buffer);
-    buffer->buffer = NULL;
-  }
-
-  buffer->buffer_size = 0;
-  buffer->head = 0;
-  buffer->count = 0;
-}
-
 // Global temperature buffer for sensor 1 (GPIO1)
-static temp_buffer_t temp_buffer_1 = {0};
+static circular_buffer_t temp_buffer_1 = {0};
 
 /**
  * @brief Read temperature from ADC channel with averaging
@@ -312,7 +154,7 @@ static void temp_task(void *pvParameters)
   // Parameters contain ADC channel and buffer pointer
   temp_task_params_t *params = (temp_task_params_t *)pvParameters;
   adc1_channel_t adc_channel = params->adc_channel;
-  temp_buffer_t *buffer = params->buffer;
+  circular_buffer_t *buffer = params->buffer;
 
   while (1)
   {
@@ -320,7 +162,7 @@ static void temp_task(void *pvParameters)
     float temperature = read_temperature_from_adc(adc_channel, TEMP_AVERAGE_SAMPLES);
 
     // Record the temperature reading in the buffer
-    temp_buffer_record_reading(buffer, temperature);
+    circular_buffer_push(buffer, &temperature);
 
     // Wait for next reading interval
     vTaskDelay(pdMS_TO_TICKS(TEMP_READ_INTERVAL_MS));
@@ -343,7 +185,7 @@ void temp_sensor_init(void)
   adc1_config_channel_atten(ADC1_CHANNEL_0, ADC_ATTEN_DB_11); // 0-3.3V range
 
   // Initialize temperature buffer
-  if (temp_buffer_init(&temp_buffer_1, TEMP_BUFFER_SIZE) != ESP_OK)
+  if (!circular_buffer_init(&temp_buffer_1, sizeof(float), TEMP_BUFFER_SIZE))
   {
     ESP_LOGE(TAG, "Failed to initialize temperature buffer");
     return;
@@ -366,7 +208,7 @@ void temp_sensor_init(void)
   if (result != pdPASS)
   {
     ESP_LOGE(TAG, "Failed to create temperature task");
-    temp_buffer_deinit(&temp_buffer_1);
+    circular_buffer_deinit(&temp_buffer_1);
     return;
   }
 
@@ -379,7 +221,9 @@ void temp_sensor_init(void)
  */
 float temp_sensor_get_reading(void)
 {
-  return temp_buffer_get_reading(&temp_buffer_1);
+  float temperature = -999.0f;
+  circular_buffer_get_latest(&temp_buffer_1, &temperature);
+  return temperature;
 }
 
 /**
@@ -389,7 +233,9 @@ float temp_sensor_get_reading(void)
  */
 float temp_sensor_get_sample(size_t index)
 {
-  return temp_buffer_get_sample(&temp_buffer_1, index);
+  float temperature = -999.0f;
+  circular_buffer_get_at_index(&temp_buffer_1, index, &temperature);
+  return temperature;
 }
 
 /**
@@ -398,7 +244,7 @@ float temp_sensor_get_sample(size_t index)
  */
 size_t temp_sensor_get_sample_count(void)
 {
-  return temp_buffer_get_sample_count(&temp_buffer_1);
+  return circular_buffer_count(&temp_buffer_1);
 }
 
 /**
@@ -412,7 +258,7 @@ void temp_sensor_deinit(void)
     temp_task_handle = NULL;
   }
 
-  temp_buffer_deinit(&temp_buffer_1);
+  circular_buffer_deinit(&temp_buffer_1);
 
   ESP_LOGI(TAG, "Temperature sensor deinitialized");
 }
