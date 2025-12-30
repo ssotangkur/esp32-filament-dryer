@@ -19,9 +19,8 @@ static const char *TAG = "TEMP";
 #define TEMP_BUFFER_SIZE 100
 #define TEMP_TASK_STACK_SIZE 2048
 #define TEMP_TASK_PRIORITY 2
-#define TEMP_READ_INTERVAL_MS 1000      // Read temperature every second
-#define TEMP_AVERAGE_SAMPLES 100        // Number of ADC samples to average for noise reduction
-#define ADC_CALIBRATION_OFFSET_V 0.020f // Manual calibration offset in volts (adjust based on voltmeter measurements)
+#define TEMP_READ_INTERVAL_MS 1000 // Read temperature every second
+#define TEMP_AVERAGE_SAMPLES 100   // Number of ADC samples to average for noise reduction
 
 // Thermistor configuration structure
 typedef struct
@@ -49,6 +48,7 @@ static const thermistor_config_t default_thermistor_config = {
 typedef struct
 {
   float temperature;
+  float voltage; // Calibrated and manually adjusted ADC voltage
   uint32_t timestamp;
 } temp_sample_t;
 
@@ -107,11 +107,11 @@ static float calculate_thermistor_temperature_from_config(float adc_voltage, con
 }
 
 /**
- * @brief Read temperature from thermistor using configuration
+ * @brief Read calibrated voltage from thermistor ADC channel
  * @param config Pointer to thermistor configuration
- * @return Temperature in Celsius, or -999.0f on error
+ * @return Calibrated voltage in volts, or -999.0f on error
  */
-static float read_temperature_from_thermistor(const thermistor_config_t *config)
+static float read_thermistor_voltage(const thermistor_config_t *config)
 {
   // Allocate buffer for ADC averaging in PSRAM
   uint16_t *adc_samples = (uint16_t *)heap_caps_malloc(config->averaging_samples * sizeof(uint16_t), MALLOC_CAP_SPIRAM);
@@ -121,8 +121,7 @@ static float read_temperature_from_thermistor(const thermistor_config_t *config)
     return -999.0f;
   }
 
-  // Take multiple ADC samples and average them to reduce noise
-  uint32_t adc_sum = 0;
+  // Take multiple ADC samples and collect them for median calculation
   uint16_t valid_samples = 0;
 
   for (int i = 0; i < config->averaging_samples; i++)
@@ -132,7 +131,6 @@ static float read_temperature_from_thermistor(const thermistor_config_t *config)
     if (ret == ESP_OK && adc_reading >= 0 && adc_reading <= 4095)
     {
       adc_samples[valid_samples] = (uint16_t)adc_reading;
-      adc_sum += adc_reading;
       valid_samples++;
     }
 
@@ -140,30 +138,87 @@ static float read_temperature_from_thermistor(const thermistor_config_t *config)
     vTaskDelay(pdMS_TO_TICKS(1));
   }
 
-  // Calculate average ADC reading
-  float avg_adc_reading = (valid_samples > 0) ? (float)adc_sum / valid_samples : 0.0f;
+  // Calculate median ADC reading (more robust than average for outliers)
+  float median_adc_reading = 0.0f;
+  if (valid_samples > 0)
+  {
+    // Sort the samples to find median
+    for (int i = 0; i < valid_samples - 1; i++)
+    {
+      for (int j = 0; j < valid_samples - i - 1; j++)
+      {
+        if (adc_samples[j] > adc_samples[j + 1])
+        {
+          // Swap
+          uint16_t temp = adc_samples[j];
+          adc_samples[j] = adc_samples[j + 1];
+          adc_samples[j + 1] = temp;
+        }
+      }
+    }
 
-  // Convert ADC reading to voltage
-  float voltage = (avg_adc_reading / 4095.0f) * config->adc_voltage_reference;
+    // For odd number of samples, take middle value
+    // For even number, average the two middle values
+    if (valid_samples % 2 == 1)
+    {
+      median_adc_reading = adc_samples[valid_samples / 2];
+    }
+    else
+    {
+      median_adc_reading = (adc_samples[valid_samples / 2 - 1] + adc_samples[valid_samples / 2]) / 2.0f;
+    }
+  }
 
+  // Convert ADC reading to calibrated voltage
+  float voltage = 0.0f;
+  if (adc_cali_handle != NULL)
+  {
+    // Use calibrated conversion if available
+    int calibrated_voltage_mv = 0;
+    esp_err_t cali_ret = adc_cali_raw_to_voltage(adc_cali_handle, (int)median_adc_reading, &calibrated_voltage_mv);
+    if (cali_ret == ESP_OK)
+    {
+      voltage = calibrated_voltage_mv / 1000.0f; // Convert mV to V
+    }
+    else
+    {
+      // Fallback to raw conversion
+      voltage = (median_adc_reading / 4095.0f) * config->adc_voltage_reference;
+    }
+  }
+  else
+  {
+    // Use raw conversion
+    voltage = (median_adc_reading / 4095.0f) * config->adc_voltage_reference;
+  }
+
+  // Free ADC averaging buffer
+  heap_caps_free(adc_samples);
+
+  return voltage;
+}
+
+/**
+ * @brief Calculate temperature from calibrated voltage using Steinhart-Hart equation
+ * @param voltage Calibrated voltage from thermistor (0-3.3V)
+ * @param config Pointer to thermistor configuration
+ * @return Temperature in Celsius
+ */
+static float calculate_temperature_from_voltage(float voltage, const thermistor_config_t *config)
+{
   // Calculate temperature using Steinhart-Hart equation for thermistor
   float temperature = calculate_thermistor_temperature_from_config(voltage, config);
 
   // Check for invalid readings
   if (temperature < -50.0f || temperature > 150.0f)
   {
-    ESP_LOGW(TAG, "Invalid temperature reading: %.2f°C (Avg ADC: %.1f, Voltage: %.3fV, Samples: %d)",
-             temperature, avg_adc_reading, voltage, valid_samples);
+    ESP_LOGW(TAG, "Invalid temperature reading: %.2f°C (Voltage: %.3fV)", temperature, voltage);
     temperature = -999.0f; // Mark as invalid
   }
   else
   {
-    ESP_LOGD(TAG, "Temperature: %.2f°C (Avg ADC: %.1f, Voltage: %.3fV, Samples: %d)",
-             temperature, avg_adc_reading, voltage, valid_samples);
+    ESP_LOGD(TAG, "Calculated temperature: %.2f°C (Voltage: %.3fV)", temperature, voltage);
   }
-
-  // Free ADC averaging buffer
-  heap_caps_free(adc_samples);
 
   return temperature;
 }
@@ -184,12 +239,16 @@ static void temp_task(void *pvParameters)
 
   while (1)
   {
-    // Read temperature from thermistor using passed configuration
-    float temperature = read_temperature_from_thermistor(config);
+    // Read calibrated voltage from thermistor ADC
+    float voltage = read_thermistor_voltage(config);
 
-    // Create temperature sample with timestamp
+    // Calculate temperature from the calibrated voltage
+    float temperature = calculate_temperature_from_voltage(voltage, config);
+
+    // Create temperature sample with temperature, voltage, and timestamp
     temp_sample_t sample = {
         .temperature = temperature,
+        .voltage = voltage,
         .timestamp = xTaskGetTickCount() * portTICK_PERIOD_MS};
 
     // Record the temperature sample in the buffer
@@ -337,36 +396,17 @@ size_t temp_sensor_get_sample_count(void)
 }
 
 /**
- * @brief Get the most recent ADC voltage reading (calibrated if available)
+ * @brief Get the most recent ADC voltage reading (calibrated and manually adjusted)
  * @return Latest voltage in volts, or -999.0f if no samples available
  */
 float temp_sensor_get_voltage(void)
 {
-  // For now, return a placeholder - we need to expose the calibrated voltage
-  // This would require modifying the sensor to store voltage readings as well
-  // For demonstration, we'll calculate it from the current temperature
-  float temp = temp_sensor_get_reading();
-  if (temp == -999.0f)
+  temp_sample_t sample;
+  if (circular_buffer_get_latest(&temp_buffer_1, &sample))
   {
-    return -999.0f;
+    return sample.voltage;
   }
-
-  // Convert back to approximate voltage (reverse of Steinhart-Hart calculation)
-  // This is a simplified approximation for display purposes
-  // R_thermistor = R_nominal * exp(B * (1/T - 1/T_nominal))
-  float T_kelvin = temp + 273.15f;
-  float T_nominal = 25.0f + 273.15f;
-  float exp_term = expf(default_thermistor_config.beta_coefficient * (1.0f / T_kelvin - 1.0f / T_nominal));
-  float thermistor_resistance = default_thermistor_config.nominal_resistance * exp_term;
-
-  // V_out = V_ref * (R_thermistor / (R_thermistor + R_series))
-  float voltage = default_thermistor_config.adc_voltage_reference *
-                  (thermistor_resistance / (thermistor_resistance + default_thermistor_config.series_resistor));
-
-  // Apply manual calibration offset to match voltmeter measurements
-  voltage += ADC_CALIBRATION_OFFSET_V;
-
-  return voltage;
+  return -999.0f;
 }
 
 /**
