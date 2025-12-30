@@ -51,8 +51,8 @@ typedef struct
 // Parameters for temperature reading task
 typedef struct
 {
-  adc1_channel_t adc_channel;
-  circular_buffer_t *buffer;
+  const thermistor_config_t *config; // Thermistor configuration
+  circular_buffer_t *buffer;         // Circular buffer for samples
 } temp_task_params_t;
 
 // Global temperature buffer for sensor 1 (GPIO1)
@@ -166,15 +166,15 @@ static TaskHandle_t temp_task_handle = NULL;
  */
 static void temp_task(void *pvParameters)
 {
-  // Parameters contain ADC channel and buffer pointer
+  // Parameters contain thermistor config and buffer pointer
   temp_task_params_t *params = (temp_task_params_t *)pvParameters;
-  adc1_channel_t adc_channel = params->adc_channel;
+  const thermistor_config_t *config = params->config;
   circular_buffer_t *buffer = params->buffer;
 
   while (1)
   {
-    // Read temperature from thermistor using default configuration
-    float temperature = read_temperature_from_thermistor(&default_thermistor_config);
+    // Read temperature from thermistor using passed configuration
+    float temperature = read_temperature_from_thermistor(config);
 
     // Create temperature sample with timestamp
     temp_sample_t sample = {
@@ -213,7 +213,7 @@ void temp_sensor_init(void)
 
   // Create task parameters
   static temp_task_params_t task_params = {
-      .adc_channel = ADC1_CHANNEL_0,
+      .config = &default_thermistor_config,
       .buffer = &temp_buffer_1};
 
   // Create temperature reading task (using sysmon wrapper for monitoring)
