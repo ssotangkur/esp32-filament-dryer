@@ -176,8 +176,13 @@ static void temp_task(void *pvParameters)
     // Read temperature from thermistor using default configuration
     float temperature = read_temperature_from_thermistor(&default_thermistor_config);
 
-    // Record the temperature reading in the buffer
-    circular_buffer_push(buffer, &temperature);
+    // Create temperature sample with timestamp
+    temp_sample_t sample = {
+        .temperature = temperature,
+        .timestamp = xTaskGetTickCount() * portTICK_PERIOD_MS};
+
+    // Record the temperature sample in the buffer
+    circular_buffer_push(buffer, &sample);
 
     // Wait for next reading interval
     vTaskDelay(pdMS_TO_TICKS(TEMP_READ_INTERVAL_MS));
@@ -200,7 +205,7 @@ void temp_sensor_init(void)
   adc1_config_channel_atten(ADC1_CHANNEL_0, ADC_ATTEN_DB_11); // 0-3.3V range
 
   // Initialize temperature buffer
-  if (!circular_buffer_init(&temp_buffer_1, sizeof(float), TEMP_BUFFER_SIZE))
+  if (!circular_buffer_init(&temp_buffer_1, sizeof(temp_sample_t), TEMP_BUFFER_SIZE))
   {
     ESP_LOGE(TAG, "Failed to initialize temperature buffer");
     return;
@@ -236,9 +241,12 @@ void temp_sensor_init(void)
  */
 float temp_sensor_get_reading(void)
 {
-  float temperature = -999.0f;
-  circular_buffer_get_latest(&temp_buffer_1, &temperature);
-  return temperature;
+  temp_sample_t sample;
+  if (circular_buffer_get_latest(&temp_buffer_1, &sample))
+  {
+    return sample.temperature;
+  }
+  return -999.0f;
 }
 
 /**
@@ -248,9 +256,12 @@ float temp_sensor_get_reading(void)
  */
 float temp_sensor_get_sample(size_t index)
 {
-  float temperature = -999.0f;
-  circular_buffer_get_at_index(&temp_buffer_1, index, &temperature);
-  return temperature;
+  temp_sample_t sample;
+  if (circular_buffer_get_at_index(&temp_buffer_1, index, &sample))
+  {
+    return sample.temperature;
+  }
+  return -999.0f;
 }
 
 /**
