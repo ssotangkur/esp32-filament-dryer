@@ -7,7 +7,7 @@
 #include "freertos/semphr.h"
 #include "esp_log.h"
 #include "esp_heap_caps.h"
-#include "driver/adc.h"
+#include "esp_adc/adc_oneshot.h"
 #include "sysmon_wrapper.h"
 #include "circular_buffer.h"
 
@@ -19,20 +19,10 @@ static const char *TAG = "TEMP";
 #define TEMP_READ_INTERVAL_MS 1000 // Read temperature every second
 #define TEMP_AVERAGE_SAMPLES 100   // Number of ADC samples to average for noise reduction
 
-// Default thermistor configuration (can be customized per sensor)
-static const thermistor_config_t default_thermistor_config = {
-    .adc_channel = ADC1_CHANNEL_0,
-    .nominal_resistance = 100000.0, // 100kΩ at 25°C
-    .nominal_temperature = 25.0,    // 25°C reference temperature
-    .beta_coefficient = 3950.0,     // Beta coefficient
-    .series_resistor = 100000.0,    // 100kΩ series resistor
-    .adc_voltage_reference = 3.3,   // 3.3V ADC reference
-    .averaging_samples = TEMP_AVERAGE_SAMPLES};
-
 // Thermistor configuration structure
 typedef struct
 {
-  adc1_channel_t adc_channel;  // ADC channel for this thermistor
+  adc_channel_t adc_channel;   // ADC channel for this thermistor
   float nominal_resistance;    // Resistance at 25°C (ohms)
   float nominal_temperature;   // Temperature for nominal resistance (°C)
   float beta_coefficient;      // Beta coefficient (K)
@@ -40,6 +30,16 @@ typedef struct
   float adc_voltage_reference; // ADC reference voltage (V)
   uint16_t averaging_samples;  // Number of ADC samples to average
 } thermistor_config_t;
+
+// Default thermistor configuration (can be customized per sensor)
+static const thermistor_config_t default_thermistor_config = {
+    .adc_channel = ADC_CHANNEL_0,
+    .nominal_resistance = 100000.0, // 100kΩ at 25°C
+    .nominal_temperature = 25.0,    // 25°C reference temperature
+    .beta_coefficient = 3950.0,     // Beta coefficient
+    .series_resistor = 100000.0,    // 100kΩ series resistor
+    .adc_voltage_reference = 3.3,   // 3.3V ADC reference
+    .averaging_samples = TEMP_AVERAGE_SAMPLES};
 
 // Temperature sample structure
 typedef struct
@@ -58,66 +58,8 @@ typedef struct
 // Global temperature buffer for sensor 1 (GPIO1)
 static circular_buffer_t temp_buffer_1 = {0};
 
-/**
- * @brief Read temperature from thermistor using configuration
- * @param config Pointer to thermistor configuration
- * @return Temperature in Celsius, or -999.0f on error
- */
-static float read_temperature_from_thermistor(const thermistor_config_t *config)
-{
-  // Allocate buffer for ADC averaging in PSRAM
-  uint16_t *adc_samples = (uint16_t *)heap_caps_malloc(config->averaging_samples * sizeof(uint16_t), MALLOC_CAP_SPIRAM);
-  if (adc_samples == NULL)
-  {
-    ESP_LOGE(TAG, "Failed to allocate ADC averaging buffer in PSRAM");
-    return -999.0f;
-  }
-
-  // Take multiple ADC samples and average them to reduce noise
-  uint32_t adc_sum = 0;
-  uint16_t valid_samples = 0;
-
-  for (int i = 0; i < config->averaging_samples; i++)
-  {
-    int adc_reading = adc1_get_raw(config->adc_channel);
-    if (adc_reading >= 0 && adc_reading <= 4095)
-    {
-      adc_samples[valid_samples] = (uint16_t)adc_reading;
-      adc_sum += adc_reading;
-      valid_samples++;
-    }
-
-    // Small delay between samples to allow ADC stabilization
-    vTaskDelay(pdMS_TO_TICKS(1));
-  }
-
-  // Calculate average ADC reading
-  float avg_adc_reading = (valid_samples > 0) ? (float)adc_sum / valid_samples : 0.0f;
-
-  // Convert ADC reading to voltage
-  float voltage = (avg_adc_reading / 4095.0f) * config->adc_voltage_reference;
-
-  // Calculate temperature using Steinhart-Hart equation for thermistor
-  float temperature = calculate_thermistor_temperature_from_config(voltage, config);
-
-  // Check for invalid readings
-  if (temperature < -50.0f || temperature > 150.0f)
-  {
-    ESP_LOGW(TAG, "Invalid temperature reading: %.2f°C (Avg ADC: %.1f, Voltage: %.3fV, Samples: %d)",
-             temperature, avg_adc_reading, voltage, valid_samples);
-    temperature = -999.0f; // Mark as invalid
-  }
-  else
-  {
-    ESP_LOGD(TAG, "Temperature: %.2f°C (Avg ADC: %.1f, Voltage: %.3fV, Samples: %d)",
-             temperature, avg_adc_reading, voltage, valid_samples);
-  }
-
-  // Free ADC averaging buffer
-  heap_caps_free(adc_samples);
-
-  return temperature;
-}
+// ADC oneshot unit handle
+static adc_oneshot_unit_handle_t adc1_handle = NULL;
 
 /**
  * @brief Calculate temperature from ADC voltage using Steinhart-Hart equation with configuration
@@ -155,6 +97,68 @@ static float calculate_thermistor_temperature_from_config(float adc_voltage, con
   float temperature_celsius = temperature_kelvin - 273.15f;
 
   return temperature_celsius;
+}
+
+/**
+ * @brief Read temperature from thermistor using configuration
+ * @param config Pointer to thermistor configuration
+ * @return Temperature in Celsius, or -999.0f on error
+ */
+static float read_temperature_from_thermistor(const thermistor_config_t *config)
+{
+  // Allocate buffer for ADC averaging in PSRAM
+  uint16_t *adc_samples = (uint16_t *)heap_caps_malloc(config->averaging_samples * sizeof(uint16_t), MALLOC_CAP_SPIRAM);
+  if (adc_samples == NULL)
+  {
+    ESP_LOGE(TAG, "Failed to allocate ADC averaging buffer in PSRAM");
+    return -999.0f;
+  }
+
+  // Take multiple ADC samples and average them to reduce noise
+  uint32_t adc_sum = 0;
+  uint16_t valid_samples = 0;
+
+  for (int i = 0; i < config->averaging_samples; i++)
+  {
+    int adc_reading = 0;
+    esp_err_t ret = adc_oneshot_read(adc1_handle, config->adc_channel, &adc_reading);
+    if (ret == ESP_OK && adc_reading >= 0 && adc_reading <= 4095)
+    {
+      adc_samples[valid_samples] = (uint16_t)adc_reading;
+      adc_sum += adc_reading;
+      valid_samples++;
+    }
+
+    // Small delay between samples to allow ADC stabilization
+    vTaskDelay(pdMS_TO_TICKS(1));
+  }
+
+  // Calculate average ADC reading
+  float avg_adc_reading = (valid_samples > 0) ? (float)adc_sum / valid_samples : 0.0f;
+
+  // Convert ADC reading to voltage
+  float voltage = (avg_adc_reading / 4095.0f) * config->adc_voltage_reference;
+
+  // Calculate temperature using Steinhart-Hart equation for thermistor
+  float temperature = calculate_thermistor_temperature_from_config(voltage, config);
+
+  // Check for invalid readings
+  if (temperature < -50.0f || temperature > 150.0f)
+  {
+    ESP_LOGW(TAG, "Invalid temperature reading: %.2f°C (Avg ADC: %.1f, Voltage: %.3fV, Samples: %d)",
+             temperature, avg_adc_reading, voltage, valid_samples);
+    temperature = -999.0f; // Mark as invalid
+  }
+  else
+  {
+    ESP_LOGD(TAG, "Temperature: %.2f°C (Avg ADC: %.1f, Voltage: %.3fV, Samples: %d)",
+             temperature, avg_adc_reading, voltage, valid_samples);
+  }
+
+  // Free ADC averaging buffer
+  heap_caps_free(adc_samples);
+
+  return temperature;
 }
 
 // Temperature reading task handle
@@ -200,9 +204,31 @@ void temp_sensor_init(void)
            default_thermistor_config.beta_coefficient, default_thermistor_config.series_resistor);
   ESP_LOGI(TAG, "ADC averaging: %d samples for noise reduction", default_thermistor_config.averaging_samples);
 
+  // Initialize ADC1 oneshot unit
+  adc_oneshot_unit_init_cfg_t init_config = {
+      .unit_id = ADC_UNIT_1,
+      .ulp_mode = ADC_ULP_MODE_DISABLE,
+  };
+  esp_err_t ret = adc_oneshot_new_unit(&init_config, &adc1_handle);
+  if (ret != ESP_OK)
+  {
+    ESP_LOGE(TAG, "Failed to initialize ADC oneshot unit: %s", esp_err_to_name(ret));
+    return;
+  }
+
   // Configure ADC1 channel 0 (GPIO1)
-  adc1_config_width(ADC_WIDTH_BIT_12);
-  adc1_config_channel_atten(ADC1_CHANNEL_0, ADC_ATTEN_DB_11); // 0-3.3V range
+  adc_oneshot_chan_cfg_t config = {
+      .atten = ADC_ATTEN_DB_12, // 0-3.3V range
+      .bitwidth = ADC_BITWIDTH_12,
+  };
+  ret = adc_oneshot_config_channel(adc1_handle, ADC_CHANNEL_0, &config);
+  if (ret != ESP_OK)
+  {
+    ESP_LOGE(TAG, "Failed to configure ADC channel: %s", esp_err_to_name(ret));
+    adc_oneshot_del_unit(adc1_handle);
+    adc1_handle = NULL;
+    return;
+  }
 
   // Initialize temperature buffer
   if (!circular_buffer_init(&temp_buffer_1, sizeof(temp_sample_t), TEMP_BUFFER_SIZE))
@@ -285,6 +311,12 @@ void temp_sensor_deinit(void)
   }
 
   circular_buffer_free(&temp_buffer_1);
+
+  if (adc1_handle != NULL)
+  {
+    adc_oneshot_del_unit(adc1_handle);
+    adc1_handle = NULL;
+  }
 
   ESP_LOGI(TAG, "Temperature sensor deinitialized");
 }
