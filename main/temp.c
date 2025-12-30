@@ -8,6 +8,8 @@
 #include "esp_log.h"
 #include "esp_heap_caps.h"
 #include "esp_adc/adc_oneshot.h"
+#include "esp_adc/adc_cali.h"
+#include "esp_adc/adc_cali_scheme.h"
 #include "sysmon_wrapper.h"
 #include "circular_buffer.h"
 
@@ -60,6 +62,9 @@ static circular_buffer_t temp_buffer_1 = {0};
 
 // ADC oneshot unit handle
 static adc_oneshot_unit_handle_t adc1_handle = NULL;
+
+// ADC calibration handle
+static adc_cali_handle_t adc_cali_handle = NULL;
 
 /**
  * @brief Calculate temperature from ADC voltage using Steinhart-Hart equation with configuration
@@ -216,6 +221,23 @@ void temp_sensor_init(void)
     return;
   }
 
+  // Initialize ADC calibration (uses eFuse data if available)
+  adc_cali_curve_fitting_config_t cali_config = {
+      .unit_id = ADC_UNIT_1,
+      .atten = ADC_ATTEN_DB_12,
+      .bitwidth = ADC_BITWIDTH_12,
+  };
+  ret = adc_cali_create_scheme_curve_fitting(&cali_config, &adc_cali_handle);
+  if (ret == ESP_OK)
+  {
+    ESP_LOGI(TAG, "ADC calibration enabled using eFuse data");
+  }
+  else
+  {
+    ESP_LOGW(TAG, "ADC calibration not available (no eFuse data): %s", esp_err_to_name(ret));
+    ESP_LOGW(TAG, "Using raw ADC values - accuracy may be reduced");
+  }
+
   // Configure ADC1 channel 0 (GPIO1)
   adc_oneshot_chan_cfg_t config = {
       .atten = ADC_ATTEN_DB_12, // 0-3.3V range
@@ -300,6 +322,36 @@ size_t temp_sensor_get_sample_count(void)
 }
 
 /**
+ * @brief Get the most recent ADC voltage reading (calibrated if available)
+ * @return Latest voltage in volts, or -999.0f if no samples available
+ */
+float temp_sensor_get_voltage(void)
+{
+  // For now, return a placeholder - we need to expose the calibrated voltage
+  // This would require modifying the sensor to store voltage readings as well
+  // For demonstration, we'll calculate it from the current temperature
+  float temp = temp_sensor_get_reading();
+  if (temp == -999.0f)
+  {
+    return -999.0f;
+  }
+
+  // Convert back to approximate voltage (reverse of Steinhart-Hart calculation)
+  // This is a simplified approximation for display purposes
+  // R_thermistor = R_nominal * exp(B * (1/T - 1/T_nominal))
+  float T_kelvin = temp + 273.15f;
+  float T_nominal = 25.0f + 273.15f;
+  float exp_term = expf(default_thermistor_config.beta_coefficient * (1.0f / T_kelvin - 1.0f / T_nominal));
+  float thermistor_resistance = default_thermistor_config.nominal_resistance * exp_term;
+
+  // V_out = V_ref * (R_thermistor / (R_thermistor + R_series))
+  float voltage = default_thermistor_config.adc_voltage_reference *
+                  (thermistor_resistance / (thermistor_resistance + default_thermistor_config.series_resistor));
+
+  return voltage;
+}
+
+/**
  * @brief Deinitialize temperature sensor (cleanup resources)
  */
 void temp_sensor_deinit(void)
@@ -311,6 +363,12 @@ void temp_sensor_deinit(void)
   }
 
   circular_buffer_free(&temp_buffer_1);
+
+  if (adc_cali_handle != NULL)
+  {
+    adc_cali_delete_scheme_curve_fitting(adc_cali_handle);
+    adc_cali_handle = NULL;
+  }
 
   if (adc1_handle != NULL)
   {

@@ -22,6 +22,7 @@ static lv_timer_t *fps_update_timer = NULL;
 
 // Temperature display variables
 static lv_obj_t *temp_label = NULL;
+static lv_obj_t *voltage_label = NULL;
 static lv_obj_t *temp_chart = NULL;
 static lv_chart_series_t *temp_series = NULL;
 static lv_timer_t *temp_update_timer = NULL;
@@ -71,6 +72,32 @@ static void temp_update_cb(lv_timer_t *timer)
 
       lv_label_set_text(temp_label, buf);
       printf("Temperature updated: %.1f°C (display: %s)\n", temp, buf);
+    }
+  }
+
+  // Update voltage label
+  if (voltage_label != NULL)
+  {
+    // Get latest voltage reading
+    float voltage = temp_sensor_get_voltage();
+
+    if (voltage == -999.0f)
+    {
+      // No samples available yet
+      lv_label_set_text(voltage_label, "Volt: --V");
+    }
+    else
+    {
+      char buf[32];
+
+      // Use integer formatting to avoid float formatting issues
+      int voltage_int = (int)(voltage * 1000); // Multiply by 1000 to keep three decimal places
+      int whole = voltage_int / 1000;
+      int decimal = voltage_int % 1000;
+      lv_snprintf(buf, sizeof(buf), "Volt: %d.%03dV", whole, decimal);
+
+      lv_label_set_text(voltage_label, buf);
+      printf("Voltage updated: %.3fV (display: %s)\n", voltage, buf);
     }
   }
 
@@ -302,10 +329,15 @@ void lvgl_demo(void)
   lv_label_set_text(version_label, "FW: " FIRMWARE_VERSION_STRING);
   lv_obj_set_pos(version_label, 10, 180); // Position above temperature display
 
-  /* Create temperature display label */
+  /* Create temperature display label - moved up */
   temp_label = lv_label_create(lv_scr_act());
   lv_label_set_text(temp_label, "Temp: --°C");
-  lv_obj_set_pos(temp_label, 10, 280); // Position below FPS label
+  lv_obj_set_pos(temp_label, 10, 200); // Moved up from 280
+
+  /* Create voltage display label - after temperature */
+  voltage_label = lv_label_create(lv_scr_act());
+  lv_label_set_text(voltage_label, "Volt: --V");
+  lv_obj_set_pos(voltage_label, 10, 220); // Position after temperature
 
   /* Create temperature chart */
   temp_chart = lv_chart_create(lv_scr_act());
@@ -319,10 +351,10 @@ void lvgl_demo(void)
   /* Create chart series */
   temp_series = lv_chart_add_series(temp_chart, lv_palette_main(LV_PALETTE_RED), LV_CHART_AXIS_PRIMARY_Y);
 
-  /* Create FPS display label */
+  /* Create FPS display label - moved up */
   fps_label = lv_label_create(lv_scr_act());
   lv_label_set_text(fps_label, "FPS: 0");
-  lv_obj_set_pos(fps_label, 10, 240); // Position below other labels
+  lv_obj_set_pos(fps_label, 10, 240); // Moved up from 240 to make room
 
   /* Initialize temperature sensor */
   temp_sensor_init();

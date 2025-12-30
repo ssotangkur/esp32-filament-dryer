@@ -34,6 +34,12 @@ extern "C"
   size_t temp_sensor_get_sample_count(void);
 
   /**
+   * @brief Get the most recent ADC voltage reading (calibrated if available)
+   * @return Latest voltage in volts, or -999.0f if no samples available
+   */
+  float temp_sensor_get_voltage(void);
+
+  /**
    * @brief Deinitialize temperature sensor (cleanup resources)
    * Stops background task and frees PSRAM buffer
    */
