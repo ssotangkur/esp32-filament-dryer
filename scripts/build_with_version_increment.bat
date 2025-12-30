@@ -7,6 +7,10 @@ if %ERRORLEVEL% NEQ 0 (
 )
 
 echo Building firmware...
+REM Work around Windows CMD 8191 character command line limit.
+REM esp_idf_shell.bat sets up many environment variables (especially PATH)
+REM that make "esp_idf_shell.bat idf.py build" exceed CMD's limit.
+REM Instead, create a temporary batch file with the build command.
 echo idf.py build > temp_build.cmd
 call esp_idf_shell.bat temp_build.cmd
 del temp_build.cmd
