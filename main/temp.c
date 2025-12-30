@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
@@ -16,6 +17,13 @@ static const char *TAG = "TEMP";
 #define TEMP_TASK_PRIORITY 2
 #define TEMP_READ_INTERVAL_MS 1000 // Read temperature every second
 
+// Thermistor constants (adjust these for your specific thermistor)
+#define THERMISTOR_NOMINAL_RESISTANCE 10000.0 // Resistance at 25°C (10kΩ typical)
+#define THERMISTOR_NOMINAL_TEMPERATURE 25.0   // Temperature for nominal resistance
+#define THERMISTOR_BETA_COEFFICIENT 3950.0    // Beta coefficient (3950K typical)
+#define SERIES_RESISTOR 10000.0               // Series resistor value (10kΩ typical)
+#define ADC_VOLTAGE_REFERENCE 3.3             // ADC reference voltage
+
 // Temperature sample structure
 typedef struct
 {
@@ -28,6 +36,43 @@ static temp_sample_t *temp_buffer = NULL;
 static size_t buffer_head = 0;  // Index for writing new samples
 static size_t buffer_count = 0; // Number of valid samples
 static SemaphoreHandle_t buffer_mutex = NULL;
+
+/**
+ * @brief Calculate temperature from ADC voltage using Steinhart-Hart equation
+ * @param adc_voltage Voltage from ADC (0-3.3V)
+ * @return Temperature in Celsius
+ */
+static float calculate_thermistor_temperature(float adc_voltage)
+{
+  // Avoid division by zero
+  if (adc_voltage >= ADC_VOLTAGE_REFERENCE)
+  {
+    return -273.15f; // Absolute zero indicates error
+  }
+
+  // Calculate thermistor resistance using voltage divider equation
+  // R_thermistor = R_series * (V_adc / (V_total - V_adc))
+  float thermistor_resistance = SERIES_RESISTOR * (adc_voltage / (ADC_VOLTAGE_REFERENCE - adc_voltage));
+
+  // Steinhart-Hart equation
+  // 1/T = 1/T0 + (1/B) * ln(R/R0)
+  // Where:
+  //   T = temperature in Kelvin
+  //   T0 = nominal temperature in Kelvin (25°C = 298.15K)
+  //   B = beta coefficient
+  //   R = thermistor resistance
+  //   R0 = resistance at T0
+
+  float ln_ratio = log(thermistor_resistance / THERMISTOR_NOMINAL_RESISTANCE);
+  float reciprocal_temp = (1.0f / (THERMISTOR_NOMINAL_TEMPERATURE + 273.15f)) +
+                          (1.0f / THERMISTOR_BETA_COEFFICIENT) * ln_ratio;
+
+  // Convert from Kelvin to Celsius
+  float temperature_kelvin = 1.0f / reciprocal_temp;
+  float temperature_celsius = temperature_kelvin - 273.15f;
+
+  return temperature_celsius;
+}
 
 // Temperature reading task handle
 static TaskHandle_t temp_task_handle = NULL;
@@ -42,12 +87,19 @@ static void temp_task(void *pvParameters)
     // Read temperature from ADC
     int adc_reading = adc1_get_raw(ADC1_CHANNEL_0);
 
-    // Convert ADC reading to voltage (approximate: 0-3.3V range)
-    float voltage = (adc_reading / 4095.0f) * 3.3f;
+    // Convert ADC reading to voltage
+    float voltage = (adc_reading / 4095.0f) * ADC_VOLTAGE_REFERENCE;
 
-    // For demonstration, convert voltage to a simulated temperature reading
-    // Assuming 0V = 0°C, 3.3V = 100°C (this would be replaced with actual sensor conversion)
-    float temperature = (voltage / 3.3f) * 100.0f;
+    // Calculate temperature using Steinhart-Hart equation for thermistor
+    float temperature = calculate_thermistor_temperature(voltage);
+
+    // Check for invalid readings
+    if (temperature < -50.0f || temperature > 150.0f)
+    {
+      ESP_LOGW(TAG, "Invalid temperature reading: %.2f°C (ADC: %d, Voltage: %.3fV)",
+               temperature, adc_reading, voltage);
+      temperature = -999.0f; // Mark as invalid
+    }
 
     // Store sample in circular buffer
     if (xSemaphoreTake(buffer_mutex, portMAX_DELAY) == pdTRUE)
@@ -76,7 +128,10 @@ static void temp_task(void *pvParameters)
  */
 void temp_sensor_init(void)
 {
-  ESP_LOGI(TAG, "Initializing temperature sensor ADC on GPIO1 with circular buffer");
+  ESP_LOGI(TAG, "Initializing thermistor temperature sensor (Steinhart-Hart) ADC on GPIO1 with circular buffer");
+  ESP_LOGI(TAG, "Thermistor: %.0fΩ @ %.0f°C, Beta=%.0fK, Series R=%.0fΩ",
+           THERMISTOR_NOMINAL_RESISTANCE, THERMISTOR_NOMINAL_TEMPERATURE,
+           THERMISTOR_BETA_COEFFICIENT, SERIES_RESISTOR);
 
   // Configure ADC1 channel 0 (GPIO1)
   adc1_config_width(ADC_WIDTH_BIT_12);
