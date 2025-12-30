@@ -7,7 +7,9 @@ if %ERRORLEVEL% NEQ 0 (
 )
 
 echo Building firmware...
-call esp_idf_shell.bat idf.py build
+echo idf.py build > temp_build.cmd
+call esp_idf_shell.bat temp_build.cmd
+del temp_build.cmd
 if %ERRORLEVEL% NEQ 0 (
     echo Build failed
     exit /b 1
