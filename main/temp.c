@@ -19,12 +19,27 @@ static const char *TAG = "TEMP";
 #define TEMP_READ_INTERVAL_MS 1000 // Read temperature every second
 #define TEMP_AVERAGE_SAMPLES 100   // Number of ADC samples to average for noise reduction
 
-// Thermistor constants (adjust these for your specific thermistor)
-#define THERMISTOR_NOMINAL_RESISTANCE 100000.0 // Resistance at 25°C (10kΩ typical)
-#define THERMISTOR_NOMINAL_TEMPERATURE 25.0    // Temperature for nominal resistance
-#define THERMISTOR_BETA_COEFFICIENT 3950.0     // Beta coefficient (3950K typical)
-#define SERIES_RESISTOR 100000.0               // Series resistor value (10kΩ typical)
-#define ADC_VOLTAGE_REFERENCE 3.3              // ADC reference voltage
+// Default thermistor configuration (can be customized per sensor)
+static const thermistor_config_t default_thermistor_config = {
+    .adc_channel = ADC1_CHANNEL_0,
+    .nominal_resistance = 100000.0, // 100kΩ at 25°C
+    .nominal_temperature = 25.0,    // 25°C reference temperature
+    .beta_coefficient = 3950.0,     // Beta coefficient
+    .series_resistor = 100000.0,    // 100kΩ series resistor
+    .adc_voltage_reference = 3.3,   // 3.3V ADC reference
+    .averaging_samples = TEMP_AVERAGE_SAMPLES};
+
+// Thermistor configuration structure
+typedef struct
+{
+  adc1_channel_t adc_channel;  // ADC channel for this thermistor
+  float nominal_resistance;    // Resistance at 25°C (ohms)
+  float nominal_temperature;   // Temperature for nominal resistance (°C)
+  float beta_coefficient;      // Beta coefficient (K)
+  float series_resistor;       // Series resistor value (ohms)
+  float adc_voltage_reference; // ADC reference voltage (V)
+  uint16_t averaging_samples;  // Number of ADC samples to average
+} thermistor_config_t;
 
 // Temperature sample structure
 typedef struct
@@ -44,15 +59,14 @@ typedef struct
 static circular_buffer_t temp_buffer_1 = {0};
 
 /**
- * @brief Read temperature from ADC channel with averaging
- * @param adc_channel ADC channel to read from
- * @param avg_samples Number of samples to average
- * @return Averaged temperature in Celsius, or -999.0f on error
+ * @brief Read temperature from thermistor using configuration
+ * @param config Pointer to thermistor configuration
+ * @return Temperature in Celsius, or -999.0f on error
  */
-static float read_temperature_from_adc(adc1_channel_t adc_channel, uint16_t avg_samples)
+static float read_temperature_from_thermistor(const thermistor_config_t *config)
 {
   // Allocate buffer for ADC averaging in PSRAM
-  uint16_t *adc_samples = (uint16_t *)heap_caps_malloc(avg_samples * sizeof(uint16_t), MALLOC_CAP_SPIRAM);
+  uint16_t *adc_samples = (uint16_t *)heap_caps_malloc(config->averaging_samples * sizeof(uint16_t), MALLOC_CAP_SPIRAM);
   if (adc_samples == NULL)
   {
     ESP_LOGE(TAG, "Failed to allocate ADC averaging buffer in PSRAM");
@@ -63,9 +77,9 @@ static float read_temperature_from_adc(adc1_channel_t adc_channel, uint16_t avg_
   uint32_t adc_sum = 0;
   uint16_t valid_samples = 0;
 
-  for (int i = 0; i < avg_samples; i++)
+  for (int i = 0; i < config->averaging_samples; i++)
   {
-    int adc_reading = adc1_get_raw(adc_channel);
+    int adc_reading = adc1_get_raw(config->adc_channel);
     if (adc_reading >= 0 && adc_reading <= 4095)
     {
       adc_samples[valid_samples] = (uint16_t)adc_reading;
@@ -81,10 +95,10 @@ static float read_temperature_from_adc(adc1_channel_t adc_channel, uint16_t avg_
   float avg_adc_reading = (valid_samples > 0) ? (float)adc_sum / valid_samples : 0.0f;
 
   // Convert ADC reading to voltage
-  float voltage = (avg_adc_reading / 4095.0f) * ADC_VOLTAGE_REFERENCE;
+  float voltage = (avg_adc_reading / 4095.0f) * config->adc_voltage_reference;
 
   // Calculate temperature using Steinhart-Hart equation for thermistor
-  float temperature = calculate_thermistor_temperature(voltage);
+  float temperature = calculate_thermistor_temperature_from_config(voltage, config);
 
   // Check for invalid readings
   if (temperature < -50.0f || temperature > 150.0f)
@@ -106,21 +120,22 @@ static float read_temperature_from_adc(adc1_channel_t adc_channel, uint16_t avg_
 }
 
 /**
- * @brief Calculate temperature from ADC voltage using Steinhart-Hart equation
+ * @brief Calculate temperature from ADC voltage using Steinhart-Hart equation with configuration
  * @param adc_voltage Voltage from ADC (0-3.3V)
+ * @param config Pointer to thermistor configuration
  * @return Temperature in Celsius
  */
-static float calculate_thermistor_temperature(float adc_voltage)
+static float calculate_thermistor_temperature_from_config(float adc_voltage, const thermistor_config_t *config)
 {
   // Avoid division by zero
-  if (adc_voltage >= ADC_VOLTAGE_REFERENCE)
+  if (adc_voltage >= config->adc_voltage_reference)
   {
     return -273.15f; // Absolute zero indicates error
   }
 
   // Calculate thermistor resistance using voltage divider equation
   // R_thermistor = R_series * (V_adc / (V_total - V_adc))
-  float thermistor_resistance = SERIES_RESISTOR * (adc_voltage / (ADC_VOLTAGE_REFERENCE - adc_voltage));
+  float thermistor_resistance = config->series_resistor * (adc_voltage / (config->adc_voltage_reference - adc_voltage));
 
   // Steinhart-Hart equation
   // 1/T = 1/T0 + (1/B) * ln(R/R0)
@@ -131,9 +146,9 @@ static float calculate_thermistor_temperature(float adc_voltage)
   //   R = thermistor resistance
   //   R0 = resistance at T0
 
-  float ln_ratio = log(thermistor_resistance / THERMISTOR_NOMINAL_RESISTANCE);
-  float reciprocal_temp = (1.0f / (THERMISTOR_NOMINAL_TEMPERATURE + 273.15f)) +
-                          (1.0f / THERMISTOR_BETA_COEFFICIENT) * ln_ratio;
+  float ln_ratio = log(thermistor_resistance / config->nominal_resistance);
+  float reciprocal_temp = (1.0f / (config->nominal_temperature + 273.15f)) +
+                          (1.0f / config->beta_coefficient) * ln_ratio;
 
   // Convert from Kelvin to Celsius
   float temperature_kelvin = 1.0f / reciprocal_temp;
@@ -158,8 +173,8 @@ static void temp_task(void *pvParameters)
 
   while (1)
   {
-    // Read temperature from ADC with averaging
-    float temperature = read_temperature_from_adc(adc_channel, TEMP_AVERAGE_SAMPLES);
+    // Read temperature from thermistor using default configuration
+    float temperature = read_temperature_from_thermistor(&default_thermistor_config);
 
     // Record the temperature reading in the buffer
     circular_buffer_push(buffer, &temperature);
@@ -176,9 +191,9 @@ void temp_sensor_init(void)
 {
   ESP_LOGI(TAG, "Initializing thermistor temperature sensor (Steinhart-Hart) ADC on GPIO1 with circular buffer");
   ESP_LOGI(TAG, "Thermistor: %.0fΩ @ %.0f°C, Beta=%.0fK, Series R=%.0fΩ",
-           THERMISTOR_NOMINAL_RESISTANCE, THERMISTOR_NOMINAL_TEMPERATURE,
-           THERMISTOR_BETA_COEFFICIENT, SERIES_RESISTOR);
-  ESP_LOGI(TAG, "ADC averaging: %d samples for noise reduction", TEMP_AVERAGE_SAMPLES);
+           default_thermistor_config.nominal_resistance, default_thermistor_config.nominal_temperature,
+           default_thermistor_config.beta_coefficient, default_thermistor_config.series_resistor);
+  ESP_LOGI(TAG, "ADC averaging: %d samples for noise reduction", default_thermistor_config.averaging_samples);
 
   // Configure ADC1 channel 0 (GPIO1)
   adc1_config_width(ADC_WIDTH_BIT_12);
