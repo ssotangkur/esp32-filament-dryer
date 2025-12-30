@@ -10,6 +10,7 @@
 #include "esp_adc/adc_oneshot.h"
 #include "esp_adc/adc_cali.h"
 #include "esp_adc/adc_cali_scheme.h"
+#include "hal/adc_types.h"
 #include "sysmon_wrapper.h"
 #include "circular_buffer.h"
 
@@ -18,8 +19,9 @@ static const char *TAG = "TEMP";
 #define TEMP_BUFFER_SIZE 100
 #define TEMP_TASK_STACK_SIZE 2048
 #define TEMP_TASK_PRIORITY 2
-#define TEMP_READ_INTERVAL_MS 1000 // Read temperature every second
-#define TEMP_AVERAGE_SAMPLES 100   // Number of ADC samples to average for noise reduction
+#define TEMP_READ_INTERVAL_MS 1000      // Read temperature every second
+#define TEMP_AVERAGE_SAMPLES 100        // Number of ADC samples to average for noise reduction
+#define ADC_CALIBRATION_OFFSET_V 0.020f // Manual calibration offset in volts (adjust based on voltmeter measurements)
 
 // Thermistor configuration structure
 typedef struct
@@ -221,7 +223,7 @@ void temp_sensor_init(void)
     return;
   }
 
-  // Initialize ADC calibration (uses eFuse data if available)
+  // Initialize ADC calibration
   adc_cali_curve_fitting_config_t cali_config = {
       .unit_id = ADC_UNIT_1,
       .atten = ADC_ATTEN_DB_12,
@@ -230,12 +232,25 @@ void temp_sensor_init(void)
   ret = adc_cali_create_scheme_curve_fitting(&cali_config, &adc_cali_handle);
   if (ret == ESP_OK)
   {
-    ESP_LOGI(TAG, "ADC calibration enabled using eFuse data");
+    ESP_LOGI(TAG, "ADC calibration enabled using curve fitting scheme");
   }
   else
   {
-    ESP_LOGW(TAG, "ADC calibration not available (no eFuse data): %s", esp_err_to_name(ret));
-    ESP_LOGW(TAG, "Using raw ADC values - accuracy may be reduced");
+    ESP_LOGW(TAG, "ADC calibration failed (%s) - using raw ADC values", esp_err_to_name(ret));
+    ESP_LOGW(TAG, "Consider manual calibration for better accuracy");
+  }
+
+  // Log calibration voltage range for debugging
+  if (adc_cali_handle != NULL)
+  {
+    int min_voltage = 0, max_voltage = 0;
+    adc_cali_raw_to_voltage(adc_cali_handle, 0, &min_voltage);
+    adc_cali_raw_to_voltage(adc_cali_handle, 4095, &max_voltage);
+    ESP_LOGI(TAG, "ADC calibration range: %d mV to %d mV", min_voltage, max_voltage);
+  }
+  else
+  {
+    ESP_LOGI(TAG, "ADC calibration not available - using raw values");
   }
 
   // Configure ADC1 channel 0 (GPIO1)
@@ -347,6 +362,9 @@ float temp_sensor_get_voltage(void)
   // V_out = V_ref * (R_thermistor / (R_thermistor + R_series))
   float voltage = default_thermistor_config.adc_voltage_reference *
                   (thermistor_resistance / (thermistor_resistance + default_thermistor_config.series_resistor));
+
+  // Apply manual calibration offset to match voltmeter measurements
+  voltage += ADC_CALIBRATION_OFFSET_V;
 
   return voltage;
 }
