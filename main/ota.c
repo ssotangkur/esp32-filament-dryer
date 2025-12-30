@@ -8,6 +8,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
+#include "sysmon_wrapper.h"
 #include <string.h>
 
 static const char *TAG = "OTA";
@@ -340,8 +341,8 @@ esp_err_t ota_update_from_https_url(const char *url)
     return ESP_ERR_INVALID_STATE;
   }
 
-  // Create HTTPS OTA task
-  if (xTaskCreate(&ota_https_task, "ota_https_task", 8192, (void *)url, 5, NULL) != pdPASS)
+  // Create HTTPS OTA task with sysmon monitoring
+  if (sysmon_xTaskCreate(&ota_https_task, "ota_https_task", 8192, (void *)url, 5, NULL) != pdPASS)
   {
     ESP_LOGE(TAG, "Failed to create OTA task");
     return ESP_ERR_NO_MEM;
@@ -358,8 +359,8 @@ esp_err_t ota_update_from_http_url(const char *url)
     return ESP_ERR_INVALID_STATE;
   }
 
-  // Create HTTP OTA task
-  if (xTaskCreate(&ota_http_task, "ota_http_task", 8192, (void *)url, 5, NULL) != pdPASS)
+  // Create HTTP OTA task with sysmon monitoring
+  if (sysmon_xTaskCreate(&ota_http_task, "ota_http_task", 8192, (void *)url, 5, NULL) != pdPASS)
   {
     ESP_LOGE(TAG, "Failed to create OTA task");
     return ESP_ERR_NO_MEM;
@@ -565,8 +566,9 @@ static void ota_check_task(void *pvParameter)
 
 esp_err_t ota_start_auto_check(void)
 {
-  // Start periodic OTA checking task (checks every 5 seconds)
-  if (xTaskCreate(&ota_check_task, "ota_check_task", 4096, NULL, 5, NULL) != pdPASS)
+  // Start periodic OTA checking task (checks every 30 seconds)
+  // Use sysmon wrapper to enable stack monitoring
+  if (sysmon_xTaskCreate(&ota_check_task, "ota_check_task", 4096, NULL, 5, NULL) != pdPASS)
   {
     ESP_LOGE(TAG, "Failed to create OTA check task");
     return ESP_ERR_NO_MEM;
