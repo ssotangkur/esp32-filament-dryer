@@ -5,6 +5,7 @@
 #include "esp_http_client.h"
 #include "esp_https_ota.h"
 #include "esp_lvgl_port.h"
+#include "esp_system.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
@@ -285,12 +286,16 @@ static void ota_http_task(void *pvParameter)
       err = esp_ota_set_boot_partition(update_partition);
       if (err == ESP_OK)
       {
-        ESP_LOGI(TAG, "OTA update successful, restarting...");
+        ESP_LOGI(TAG, "OTA update successful, performing clean restart...");
         xSemaphoreTake(ota_mutex, portMAX_DELAY);
         ota_in_progress = false;
         ota_progress = -1;
         xSemaphoreGive(ota_mutex);
-        esp_restart();
+
+        // Force immediate watchdog reset for clean system state
+        // This ensures no stale resources or LVGL state issues after OTA
+        ESP_LOGI(TAG, "Triggering watchdog reset...");
+        esp_system_abort("OTA completed successfully - clean restart");
       }
       else
       {
