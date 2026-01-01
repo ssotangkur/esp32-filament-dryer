@@ -20,7 +20,7 @@ static const char *TAG = "TEMP";
 #define TEMP_TASK_STACK_SIZE 2048
 #define TEMP_TASK_PRIORITY 2
 #define TEMP_READ_INTERVAL_MS 1000 // Read temperature every second
-#define TEMP_AVERAGE_SAMPLES 100   // Number of ADC samples to average for noise reduction
+#define TEMP_AVERAGE_SAMPLES 250   // Number of ADC samples to average for noise reduction
 
 // Thermistor configuration structure
 typedef struct

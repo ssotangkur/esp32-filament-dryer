@@ -1,0 +1,25 @@
+# Git Commit Rules
+
+## Commit Behavior
+
+NEVER commit changes automatically. Always wait for explicit user approval before running `git commit`.
+
+### Prohibited Actions:
+- Do not run `git commit` without explicit user instruction
+- Do not assume permission to commit based on successful builds
+- Do not commit "working solutions" or "completed tasks" automatically
+
+### Required Actions:
+- Always ask user permission before committing
+- Wait for explicit "yes", "commit", or "go ahead" before running commit commands
+- If user says "don't commit automatically anymore", strictly adhere to this rule
+
+### Exception:
+Only commit immediately if user explicitly says something like:
+- "Commit this now"
+- "Go ahead and commit"
+- "Commit the changes"
+- "Please commit"
+
+### Reminder:
+This rule prevents accidental commits and ensures user has full control over when changes are committed to version control.
