@@ -13,6 +13,7 @@
 #include "hal/adc_types.h"
 #include "sysmon_wrapper.h"
 #include "circular_buffer.h"
+#include "temp.h"
 
 static const char *TAG = "TEMP";
 
@@ -25,24 +26,12 @@ static const char *TAG = "TEMP";
 // Thermistor configuration structure
 typedef struct
 {
-  adc_channel_t adc_channel;   // ADC channel for this thermistor
-  float nominal_resistance;    // Resistance at 25°C (ohms)
-  float nominal_temperature;   // Temperature for nominal resistance (°C)
-  float beta_coefficient;      // Beta coefficient (K)
-  float series_resistor;       // Series resistor value (ohms)
-  float adc_voltage_reference; // ADC reference voltage (V)
-  uint16_t averaging_samples;  // Number of ADC samples to average
+  adc_channel_t adc_channel;      // ADC channel for this thermistor
+  steinhart_hart_coeffs_t coeffs; // Steinhart-Hart coefficients
+  float series_resistor;          // Series resistor value (ohms)
+  float adc_voltage_reference;    // ADC reference voltage (V)
+  uint16_t averaging_samples;     // Number of ADC samples to average
 } thermistor_config_t;
-
-// Default thermistor configuration (can be customized per sensor)
-static const thermistor_config_t default_thermistor_config = {
-    .adc_channel = ADC_CHANNEL_0,
-    .nominal_resistance = 100000.0, // 100kΩ at 25°C
-    .nominal_temperature = 25.0,    // 25°C reference temperature
-    .beta_coefficient = 3950.0,     // Beta coefficient
-    .series_resistor = 100000.0,    // 100kΩ series resistor
-    .adc_voltage_reference = 3.3,   // 3.3V ADC reference
-    .averaging_samples = TEMP_AVERAGE_SAMPLES};
 
 // Temperature sample structure
 typedef struct
@@ -52,15 +41,38 @@ typedef struct
   uint32_t timestamp;
 } temp_sample_t;
 
-// Parameters for temperature reading task
+// Sensor information for the task
 typedef struct
 {
   const thermistor_config_t *config; // Thermistor configuration
   circular_buffer_t *buffer;         // Circular buffer for samples
+} sensor_info_t;
+
+// Parameters for temperature reading task
+typedef struct
+{
+  sensor_info_t *sensors; // Array of sensor configurations
+  size_t sensor_count;    // Number of sensors
 } temp_task_params_t;
 
-// Global temperature buffer for sensor 1 (GPIO1)
-static circular_buffer_t temp_buffer_1 = {0};
+// Temperature sensor handle structure (opaque type implementation)
+struct temp_sensor_handle
+{
+  circular_buffer_t *buffer;         // Pointer to the sensor's buffer
+  const thermistor_config_t *config; // Pointer to the sensor's configuration (optional, for future use)
+};
+
+// Global temperature buffers
+static circular_buffer_t temp_buffer_1 = {0}; // Air temperature (ADC_CHANNEL_0)
+static circular_buffer_t temp_buffer_2 = {0}; // Heater temperature (ADC_CHANNEL_1)
+
+// Global sensor configurations (set during init)
+static thermistor_config_t *air_config_ptr = NULL;
+static thermistor_config_t *heater_config_ptr = NULL;
+
+// Global sensor handles (initialized at runtime)
+static struct temp_sensor_handle air_sensor_handle;
+static struct temp_sensor_handle heater_sensor_handle;
 
 // ADC oneshot unit handle
 static adc_oneshot_unit_handle_t adc1_handle = NULL;
@@ -86,18 +98,15 @@ static float calculate_thermistor_temperature_from_config(float adc_voltage, con
   // R_thermistor = R_series * (V_adc / (V_total - V_adc))
   float thermistor_resistance = config->series_resistor * (adc_voltage / (config->adc_voltage_reference - adc_voltage));
 
-  // Steinhart-Hart equation
-  // 1/T = 1/T0 + (1/B) * ln(R/R0)
+  // Full Steinhart-Hart equation
+  // 1/T = A + B * ln(R) + C * (ln(R))^3
   // Where:
   //   T = temperature in Kelvin
-  //   T0 = nominal temperature in Kelvin (25°C = 298.15K)
-  //   B = beta coefficient
   //   R = thermistor resistance
-  //   R0 = resistance at T0
+  //   A, B, C = Steinhart-Hart coefficients
 
-  float ln_ratio = log(thermistor_resistance / config->nominal_resistance);
-  float reciprocal_temp = (1.0f / (config->nominal_temperature + 273.15f)) +
-                          (1.0f / config->beta_coefficient) * ln_ratio;
+  float ln_r = logf(thermistor_resistance);
+  float reciprocal_temp = config->coeffs.A + config->coeffs.B * ln_r + config->coeffs.C * ln_r * ln_r * ln_r;
 
   // Convert from Kelvin to Celsius
   float temperature_kelvin = 1.0f / reciprocal_temp;
@@ -113,7 +122,7 @@ static float calculate_thermistor_temperature_from_config(float adc_voltage, con
  */
 static float read_thermistor_voltage(const thermistor_config_t *config)
 {
-  // Allocate buffer for ADC averaging in PSRAM
+  // Allocate buffer for calculating ADC median in PSRAM
   uint16_t *adc_samples = (uint16_t *)heap_caps_malloc(config->averaging_samples * sizeof(uint16_t), MALLOC_CAP_SPIRAM);
   if (adc_samples == NULL)
   {
@@ -192,7 +201,7 @@ static float read_thermistor_voltage(const thermistor_config_t *config)
     voltage = (median_adc_reading / 4095.0f) * config->adc_voltage_reference;
   }
 
-  // Free ADC averaging buffer
+  // Free ADC median buffer
   heap_caps_free(adc_samples);
 
   return voltage;
@@ -227,32 +236,48 @@ static float calculate_temperature_from_voltage(float voltage, const thermistor_
 static TaskHandle_t temp_task_handle = NULL;
 
 /**
- * @brief Generic temperature reading task
- * @param pvParameters Pointer to temp_task_params_t structure
+ * @brief Multi-sensor temperature reading task
+ * Reads all sensors passed via parameters in a loop
+ * @param pvParameters Pointer to temp_task_params_t with sensor array
  */
 static void temp_task(void *pvParameters)
 {
-  // Parameters contain thermistor config and buffer pointer
   temp_task_params_t *params = (temp_task_params_t *)pvParameters;
-  const thermistor_config_t *config = params->config;
-  circular_buffer_t *buffer = params->buffer;
+  if (params == NULL || params->sensors == NULL || params->sensor_count == 0)
+  {
+    ESP_LOGE(TAG, "Invalid parameters for temp_task");
+    return;
+  }
 
   while (1)
   {
-    // Read calibrated voltage from thermistor ADC
-    float voltage = read_thermistor_voltage(config);
+    // Process each sensor in the array
+    for (size_t i = 0; i < params->sensor_count; i++)
+    {
+      sensor_info_t *sensor = &params->sensors[i];
 
-    // Calculate temperature from the calibrated voltage
-    float temperature = calculate_temperature_from_voltage(voltage, config);
+      if (sensor->config != NULL && sensor->buffer != NULL)
+      {
+        // Read voltage from this sensor
+        float voltage = read_thermistor_voltage(sensor->config);
+        float temperature = calculate_temperature_from_voltage(voltage, sensor->config);
 
-    // Create temperature sample with temperature, voltage, and timestamp
-    temp_sample_t sample = {
-        .temperature = temperature,
-        .voltage = voltage,
-        .timestamp = xTaskGetTickCount() * portTICK_PERIOD_MS};
+        // Create sample
+        temp_sample_t sample = {
+            .temperature = temperature,
+            .voltage = voltage,
+            .timestamp = xTaskGetTickCount() * portTICK_PERIOD_MS};
 
-    // Record the temperature sample in the buffer
-    circular_buffer_push(buffer, &sample);
+        // Store in buffer
+        circular_buffer_push(sensor->buffer, &sample);
+      }
+
+      // Small delay between sensors to avoid ADC conflicts
+      if (i < params->sensor_count - 1)
+      {
+        vTaskDelay(pdMS_TO_TICKS(10));
+      }
+    }
 
     // Wait for next reading interval
     vTaskDelay(pdMS_TO_TICKS(TEMP_READ_INTERVAL_MS));
@@ -260,15 +285,128 @@ static void temp_task(void *pvParameters)
 }
 
 /**
+ * @brief Calculate Steinhart-Hart coefficients from three temperature-resistance data points
+ * @param p1 First calibration point
+ * @param p2 Second calibration point
+ * @param p3 Third calibration point
+ * @return Steinhart-Hart coefficients structure
+ */
+steinhart_hart_coeffs_t calculate_steinhart_hart_coefficients(
+    temperature_resistance_point_t p1,
+    temperature_resistance_point_t p2,
+    temperature_resistance_point_t p3)
+{
+  // Convert temperatures to Kelvin
+  float tk1 = p1.temperature_celsius + 273.15f;
+  float tk2 = p2.temperature_celsius + 273.15f;
+  float tk3 = p3.temperature_celsius + 273.15f;
+
+  // Calculate reciprocals
+  float y1 = 1.0f / tk1;
+  float y2 = 1.0f / tk2;
+  float y3 = 1.0f / tk3;
+
+  // Calculate natural logs of resistances
+  float l1 = logf(p1.resistance_ohms);
+  float l2 = logf(p2.resistance_ohms);
+  float l3 = logf(p3.resistance_ohms);
+
+  // Differences
+  float d21 = l2 - l1;
+  float d31 = l3 - l1;
+  float dy21 = y2 - y1;
+  float dy31 = y3 - y1;
+
+  // Powers
+  float p21 = l2 * l2 * l2 - l1 * l1 * l1; // (l2^3 - l1^3)
+  float p31 = l3 * l3 * l3 - l1 * l1 * l1; // (l3^3 - l1^3)
+
+  // Solve for C
+  float denominator = p31 - p21 * d31 / d21;
+  if (fabsf(denominator) < 1e-10f)
+  {
+    // Degenerate case, return invalid coefficients
+    return (steinhart_hart_coeffs_t){0.0f, 0.0f, 0.0f};
+  }
+
+  float c = (dy31 - dy21 * d31 / d21) / denominator;
+
+  // Solve for B
+  float b = (dy21 - c * p21) / d21;
+
+  // Solve for A
+  float a = y1 - b * l1 - c * l1 * l1 * l1;
+
+  return (steinhart_hart_coeffs_t){a, b, c};
+}
+
+/**
  * @brief Initialize ADC and temperature sampling system
  */
 void temp_sensor_init(void)
 {
-  ESP_LOGI(TAG, "Initializing thermistor temperature sensor (Steinhart-Hart) ADC on GPIO1 with circular buffer");
-  ESP_LOGI(TAG, "Thermistor: %.0fΩ @ %.0f°C, Beta=%.0fK, Series R=%.0fΩ",
-           default_thermistor_config.nominal_resistance, default_thermistor_config.nominal_temperature,
-           default_thermistor_config.beta_coefficient, default_thermistor_config.series_resistor);
-  ESP_LOGI(TAG, "ADC averaging: %d samples for noise reduction", default_thermistor_config.averaging_samples);
+  ESP_LOGI(TAG, "Initializing dual thermistor temperature sensors (Steinhart-Hart) ADC on GPIO1 and GPIO2");
+
+  // ===== AIR TEMPERATURE SENSOR (ADC_CHANNEL_0) =====
+  // Define three calibration points for air temperature sensor
+  temperature_resistance_point_t air_cal_point_1 = {.temperature_celsius = AIR_TEMP_SAMPLE_1_CELSIUS, .resistance_ohms = AIR_TEMP_SAMPLE_1_OHMS};
+  temperature_resistance_point_t air_cal_point_2 = {.temperature_celsius = AIR_TEMP_SAMPLE_2_CELSIUS, .resistance_ohms = AIR_TEMP_SAMPLE_2_OHMS};
+  temperature_resistance_point_t air_cal_point_3 = {.temperature_celsius = AIR_TEMP_SAMPLE_3_CELSIUS, .resistance_ohms = AIR_TEMP_SAMPLE_3_OHMS};
+
+  // Calculate Steinhart-Hart coefficients for air sensor
+  steinhart_hart_coeffs_t air_coeffs = calculate_steinhart_hart_coefficients(air_cal_point_1, air_cal_point_2, air_cal_point_3);
+
+  // Create air thermistor configuration
+  static thermistor_config_t air_config = {
+      .adc_channel = ADC_CHANNEL_0,
+      .coeffs = {0.0f, 0.0f, 0.0f},                            // Will be assigned below
+      .series_resistor = AIR_TEMP_SERIES_RESISTOR,             // 100kΩ series resistor
+      .adc_voltage_reference = AIR_TEMP_ADC_VOLTAGE_REFERENCE, // 3.3V ADC reference
+      .averaging_samples = TEMP_AVERAGE_SAMPLES};
+  air_config.coeffs = air_coeffs; // Assign calculated coefficients
+
+  ESP_LOGI(TAG, "Air sensor calibration: %.0f°C@%.0fΩ, %.0f°C@%.0fΩ, %.0f°C@%.0fΩ",
+           air_cal_point_1.temperature_celsius, air_cal_point_1.resistance_ohms,
+           air_cal_point_2.temperature_celsius, air_cal_point_2.resistance_ohms,
+           air_cal_point_3.temperature_celsius, air_cal_point_3.resistance_ohms);
+  ESP_LOGI(TAG, "Air coefficients: A=%.9f, B=%.9f, C=%.13f",
+           air_coeffs.A, air_coeffs.B, air_coeffs.C);
+
+  // ===== HEATER TEMPERATURE SENSOR (ADC_CHANNEL_1) =====
+  // Define three calibration points for heater temperature sensor
+  temperature_resistance_point_t heater_cal_point_1 = {.temperature_celsius = HEATER_TEMP_SAMPLE_1_CELSIUS, .resistance_ohms = HEATER_TEMP_SAMPLE_1_OHMS};
+  temperature_resistance_point_t heater_cal_point_2 = {.temperature_celsius = HEATER_TEMP_SAMPLE_2_CELSIUS, .resistance_ohms = HEATER_TEMP_SAMPLE_2_OHMS};
+  temperature_resistance_point_t heater_cal_point_3 = {.temperature_celsius = HEATER_TEMP_SAMPLE_3_CELSIUS, .resistance_ohms = HEATER_TEMP_SAMPLE_3_OHMS};
+
+  // Calculate Steinhart-Hart coefficients for heater sensor
+  steinhart_hart_coeffs_t heater_coeffs = calculate_steinhart_hart_coefficients(heater_cal_point_1, heater_cal_point_2, heater_cal_point_3);
+
+  // Create heater thermistor configuration
+  static thermistor_config_t heater_config = {
+      .adc_channel = ADC_CHANNEL_1,
+      .coeffs = {0.0f, 0.0f, 0.0f},                               // Will be assigned below
+      .series_resistor = HEATER_TEMP_SERIES_RESISTOR,             // 100kΩ series resistor
+      .adc_voltage_reference = HEATER_TEMP_ADC_VOLTAGE_REFERENCE, // 3.3V ADC reference
+      .averaging_samples = TEMP_AVERAGE_SAMPLES};
+  heater_config.coeffs = heater_coeffs; // Assign calculated coefficients
+
+  // Set global config pointers for the dual task
+  air_config_ptr = &air_config;
+  heater_config_ptr = &heater_config;
+
+  // Initialize sensor handles
+  air_sensor_handle.buffer = &temp_buffer_1;
+  air_sensor_handle.config = air_config_ptr;
+
+  heater_sensor_handle.buffer = &temp_buffer_2;
+  heater_sensor_handle.config = heater_config_ptr;
+
+  ESP_LOGI(TAG, "Heater sensor calibration: %.0f°C@%.0fΩ, %.0f°C@%.0fΩ, %.0f°C@%.0fΩ",
+           heater_cal_point_1.temperature_celsius, heater_cal_point_1.resistance_ohms,
+           heater_cal_point_2.temperature_celsius, heater_cal_point_2.resistance_ohms,
+           heater_cal_point_3.temperature_celsius, heater_cal_point_3.resistance_ohms);
+  ESP_LOGI(TAG, "Heater coefficients: A=%.9f, B=%.9f, C=%.13f",
+           heater_coeffs.A, heater_coeffs.B, heater_coeffs.C);
 
   // Initialize ADC1 oneshot unit
   adc_oneshot_unit_init_cfg_t init_config = {
@@ -312,59 +450,119 @@ void temp_sensor_init(void)
     ESP_LOGI(TAG, "ADC calibration not available - using raw values");
   }
 
-  // Configure ADC1 channel 0 (GPIO1)
+  // Configure ADC1 channels for both sensors
   adc_oneshot_chan_cfg_t config = {
       .atten = ADC_ATTEN_DB_12, // 0-3.3V range
       .bitwidth = ADC_BITWIDTH_12,
   };
+
+  // Configure air sensor (ADC_CHANNEL_0)
   ret = adc_oneshot_config_channel(adc1_handle, ADC_CHANNEL_0, &config);
   if (ret != ESP_OK)
   {
-    ESP_LOGE(TAG, "Failed to configure ADC channel: %s", esp_err_to_name(ret));
+    ESP_LOGE(TAG, "Failed to configure ADC channel 0: %s", esp_err_to_name(ret));
     adc_oneshot_del_unit(adc1_handle);
     adc1_handle = NULL;
     return;
   }
 
-  // Initialize temperature buffer
-  if (!circular_buffer_init(&temp_buffer_1, sizeof(temp_sample_t), TEMP_BUFFER_SIZE))
+  // Configure heater sensor (ADC_CHANNEL_1)
+  ret = adc_oneshot_config_channel(adc1_handle, ADC_CHANNEL_1, &config);
+  if (ret != ESP_OK)
   {
-    ESP_LOGE(TAG, "Failed to initialize temperature buffer");
+    ESP_LOGE(TAG, "Failed to configure ADC channel 1: %s", esp_err_to_name(ret));
+    adc_oneshot_del_unit(adc1_handle);
+    adc1_handle = NULL;
     return;
   }
 
+  // Initialize temperature buffers
+  if (!circular_buffer_init(&temp_buffer_1, sizeof(temp_sample_t), TEMP_BUFFER_SIZE))
+  {
+    ESP_LOGE(TAG, "Failed to initialize air temperature buffer");
+    return;
+  }
+
+  if (!circular_buffer_init(&temp_buffer_2, sizeof(temp_sample_t), TEMP_BUFFER_SIZE))
+  {
+    ESP_LOGE(TAG, "Failed to initialize heater temperature buffer");
+    circular_buffer_free(&temp_buffer_1);
+    return;
+  }
+
+  // Create sensor array for the task
+  static sensor_info_t sensor_array[] = {
+      {.config = &air_config, .buffer = &temp_buffer_1},   // Air sensor
+      {.config = &heater_config, .buffer = &temp_buffer_2} // Heater sensor
+  };
+
   // Create task parameters
   static temp_task_params_t task_params = {
-      .config = &default_thermistor_config,
-      .buffer = &temp_buffer_1};
+      .sensors = sensor_array,
+      .sensor_count = sizeof(sensor_array) / sizeof(sensor_info_t)};
 
-  // Create temperature reading task (using sysmon wrapper for monitoring)
+  // Create multi-sensor temperature reading task
   BaseType_t result = sysmon_xTaskCreate(
       temp_task,
       "temp_task",
       TEMP_TASK_STACK_SIZE,
-      &task_params,
+      &task_params, // Pass sensor array
       TEMP_TASK_PRIORITY,
       &temp_task_handle);
 
   if (result != pdPASS)
   {
-    ESP_LOGE(TAG, "Failed to create temperature task");
+    ESP_LOGE(TAG, "Failed to create dual temperature task");
     circular_buffer_free(&temp_buffer_1);
+    circular_buffer_free(&temp_buffer_2);
     return;
   }
 
-  ESP_LOGI(TAG, "Temperature sensor initialized with %d sample buffer in PSRAM", TEMP_BUFFER_SIZE);
+  ESP_LOGI(TAG, "Dual temperature sensors initialized with %d sample buffers in PSRAM", TEMP_BUFFER_SIZE);
 }
 
 /**
- * @brief Get the most recent temperature reading
- * @return Latest temperature in Celsius, or -999.0f if no samples available
+ * @brief Get handle to the air temperature sensor
+ * @return Handle to the air temperature sensor, or NULL if not initialized
  */
-float temp_sensor_get_reading(void)
+temp_sensor_handle_t temp_sensor_get_air_sensor(void)
 {
+  if (circular_buffer_count(&temp_buffer_1) == 0)
+  {
+    return NULL; // Not initialized
+  }
+
+  return &air_sensor_handle;
+}
+
+/**
+ * @brief Get handle to the heater temperature sensor
+ * @return Handle to the heater temperature sensor, or NULL if not initialized
+ */
+temp_sensor_handle_t temp_sensor_get_heater_sensor(void)
+{
+  if (circular_buffer_count(&temp_buffer_2) == 0)
+  {
+    return NULL; // Not initialized
+  }
+
+  return &heater_sensor_handle;
+}
+
+/**
+ * @brief Get the most recent temperature reading from a sensor
+ * @param sensor Handle to the temperature sensor
+ * @return Latest temperature in Celsius, or -999.0f if no samples available or invalid sensor
+ */
+float temp_sensor_get_reading(temp_sensor_handle_t sensor)
+{
+  if (sensor == NULL || sensor->buffer == NULL)
+  {
+    return -999.0f;
+  }
+
   temp_sample_t sample;
-  if (circular_buffer_get_latest(&temp_buffer_1, &sample))
+  if (circular_buffer_get_latest(sensor->buffer, &sample))
   {
     return sample.temperature;
   }
@@ -372,14 +570,20 @@ float temp_sensor_get_reading(void)
 }
 
 /**
- * @brief Get temperature sample at specific index (0 = oldest, buffer_count-1 = newest)
+ * @brief Get temperature sample at specific index from a sensor (0 = oldest, buffer_count-1 = newest)
+ * @param sensor Handle to the temperature sensor
  * @param index Sample index (0 to buffer_count-1)
- * @return Temperature value, or -999.0f if invalid index
+ * @return Temperature value, or -999.0f if invalid index or sensor
  */
-float temp_sensor_get_sample(size_t index)
+float temp_sensor_get_sample(temp_sensor_handle_t sensor, size_t index)
 {
+  if (sensor == NULL || sensor->buffer == NULL)
+  {
+    return -999.0f;
+  }
+
   temp_sample_t sample;
-  if (circular_buffer_get_at_index(&temp_buffer_1, index, &sample))
+  if (circular_buffer_get_at_index(sensor->buffer, index, &sample))
   {
     return sample.temperature;
   }
@@ -387,22 +591,34 @@ float temp_sensor_get_sample(size_t index)
 }
 
 /**
- * @brief Get number of stored temperature samples
- * @return Number of valid samples (0 to TEMP_BUFFER_SIZE)
+ * @brief Get number of stored temperature samples from a sensor
+ * @param sensor Handle to the temperature sensor
+ * @return Number of valid samples (0 to TEMP_BUFFER_SIZE), or 0 if invalid sensor
  */
-size_t temp_sensor_get_sample_count(void)
+size_t temp_sensor_get_sample_count(temp_sensor_handle_t sensor)
 {
-  return circular_buffer_count(&temp_buffer_1);
+  if (sensor == NULL || sensor->buffer == NULL)
+  {
+    return 0;
+  }
+
+  return circular_buffer_count(sensor->buffer);
 }
 
 /**
- * @brief Get the most recent ADC voltage reading (calibrated and manually adjusted)
- * @return Latest voltage in volts, or -999.0f if no samples available
+ * @brief Get the most recent ADC voltage reading from a sensor (calibrated if available)
+ * @param sensor Handle to the temperature sensor
+ * @return Latest voltage in volts, or -999.0f if no samples available or invalid sensor
  */
-float temp_sensor_get_voltage(void)
+float temp_sensor_get_voltage(temp_sensor_handle_t sensor)
 {
+  if (sensor == NULL || sensor->buffer == NULL)
+  {
+    return -999.0f;
+  }
+
   temp_sample_t sample;
-  if (circular_buffer_get_latest(&temp_buffer_1, &sample))
+  if (circular_buffer_get_latest(sensor->buffer, &sample))
   {
     return sample.voltage;
   }
@@ -421,6 +637,7 @@ void temp_sensor_deinit(void)
   }
 
   circular_buffer_free(&temp_buffer_1);
+  circular_buffer_free(&temp_buffer_2);
 
   if (adc_cali_handle != NULL)
   {

@@ -51,83 +51,95 @@ static void temp_update_cb(lv_timer_t *timer)
   // Update temperature label
   if (temp_label != NULL)
   {
-    // Get latest temperature from circular buffer
-    float temp = temp_sensor_get_reading();
-
-    if (temp == -999.0f)
+    temp_sensor_handle_t air_sensor = temp_sensor_get_air_sensor();
+    if (air_sensor != NULL)
     {
-      // No samples available yet
-      lv_label_set_text(temp_label, "Temp: --°C");
-      printf("Temperature: No samples available yet\n");
-    }
-    else
-    {
-      char buf[32];
+      // Get latest temperature from air sensor
+      float temp = temp_sensor_get_reading(air_sensor);
 
-      // Use integer formatting to avoid float formatting issues
-      int temp_int = (int)(temp * 10); // Multiply by 10 to keep one decimal place
-      int whole = temp_int / 10;
-      int decimal = temp_int % 10;
-      lv_snprintf(buf, sizeof(buf), "Temp: %d.%d°C", whole, decimal);
+      if (temp == -999.0f)
+      {
+        // No samples available yet
+        lv_label_set_text(temp_label, "Temp: --°C");
+        printf("Temperature: No samples available yet\n");
+      }
+      else
+      {
+        char buf[32];
 
-      lv_label_set_text(temp_label, buf);
-      printf("Temperature updated: %.1f°C (display: %s)\n", temp, buf);
+        // Use integer formatting to avoid float formatting issues
+        int temp_int = (int)(temp * 10); // Multiply by 10 to keep one decimal place
+        int whole = temp_int / 10;
+        int decimal = temp_int % 10;
+        lv_snprintf(buf, sizeof(buf), "Temp: %d.%d°C", whole, decimal);
+
+        lv_label_set_text(temp_label, buf);
+        printf("Temperature updated: %.1f°C (display: %s)\n", temp, buf);
+      }
     }
   }
 
   // Update voltage label
   if (voltage_label != NULL)
   {
-    // Get latest voltage reading
-    float voltage = temp_sensor_get_voltage();
-
-    if (voltage == -999.0f)
+    temp_sensor_handle_t air_sensor = temp_sensor_get_air_sensor();
+    if (air_sensor != NULL)
     {
-      // No samples available yet
-      lv_label_set_text(voltage_label, "Volt: --V");
-    }
-    else
-    {
-      char buf[32];
+      // Get latest voltage reading from air sensor
+      float voltage = temp_sensor_get_voltage(air_sensor);
 
-      // Use integer formatting to avoid float formatting issues
-      int voltage_int = (int)(voltage * 1000); // Multiply by 1000 to keep three decimal places
-      int whole = voltage_int / 1000;
-      int decimal = voltage_int % 1000;
-      lv_snprintf(buf, sizeof(buf), "Volt: %d.%03dV", whole, decimal);
+      if (voltage == -999.0f)
+      {
+        // No samples available yet
+        lv_label_set_text(voltage_label, "Volt: --V");
+      }
+      else
+      {
+        char buf[32];
 
-      lv_label_set_text(voltage_label, buf);
-      printf("Voltage updated: %.3fV (display: %s)\n", voltage, buf);
+        // Use integer formatting to avoid float formatting issues
+        int voltage_int = (int)(voltage * 1000); // Multiply by 1000 to keep three decimal places
+        int whole = voltage_int / 1000;
+        int decimal = voltage_int % 1000;
+        lv_snprintf(buf, sizeof(buf), "Volt: %d.%03dV", whole, decimal);
+
+        lv_label_set_text(voltage_label, buf);
+        printf("Voltage updated: %.3fV (display: %s)\n", voltage, buf);
+      }
     }
   }
 
   // Update temperature chart
   if (temp_chart != NULL && temp_series != NULL)
   {
-    size_t sample_count = temp_sensor_get_sample_count();
-
-    // Clear existing points
-    lv_chart_set_point_count(temp_chart, 0);
-
-    if (sample_count > 0)
+    temp_sensor_handle_t air_sensor = temp_sensor_get_air_sensor();
+    if (air_sensor != NULL)
     {
-      // Show last 20 samples (or all if less than 20)
-      size_t points_to_show = (sample_count < 20) ? sample_count : 20;
-      lv_chart_set_point_count(temp_chart, points_to_show);
+      size_t sample_count = temp_sensor_get_sample_count(air_sensor);
 
-      // Add points to chart (oldest to newest)
-      for (size_t i = 0; i < points_to_show; i++)
+      // Clear existing points
+      lv_chart_set_point_count(temp_chart, 0);
+
+      if (sample_count > 0)
       {
-        float temp_val = temp_sensor_get_sample(sample_count - points_to_show + i);
-        if (temp_val != -999.0f)
+        // Show last 20 samples (or all if less than 20)
+        size_t points_to_show = (sample_count < 20) ? sample_count : 20;
+        lv_chart_set_point_count(temp_chart, points_to_show);
+
+        // Add points to chart (oldest to newest)
+        for (size_t i = 0; i < points_to_show; i++)
         {
-          // Convert to integer for chart (multiply by 10 to preserve one decimal)
-          lv_chart_set_next_value(temp_chart, temp_series, (int32_t)(temp_val * 10));
+          float temp_val = temp_sensor_get_sample(air_sensor, sample_count - points_to_show + i);
+          if (temp_val != -999.0f)
+          {
+            // Convert to integer for chart (multiply by 10 to preserve one decimal)
+            lv_chart_set_next_value(temp_chart, temp_series, (int32_t)(temp_val * 10));
+          }
         }
       }
-    }
 
-    lv_chart_refresh(temp_chart);
+      lv_chart_refresh(temp_chart);
+    }
   }
 }
 
