@@ -37,7 +37,8 @@ typedef struct
 typedef struct
 {
   float temperature;
-  float voltage; // Calibrated and manually adjusted ADC voltage
+  float voltage;    // Calibrated and manually adjusted ADC voltage
+  float resistance; // Thermistor resistance in ohms
   uint32_t timestamp;
 } temp_sample_t;
 
@@ -81,22 +82,38 @@ static adc_oneshot_unit_handle_t adc1_handle = NULL;
 static adc_cali_handle_t adc_cali_handle = NULL;
 
 /**
- * @brief Calculate temperature from ADC voltage using Steinhart-Hart equation with configuration
+ * @brief Calculate thermistor resistance from ADC voltage using voltage divider equation
  * @param adc_voltage Voltage from ADC (0-3.3V)
  * @param config Pointer to thermistor configuration
- * @return Temperature in Celsius
+ * @return Thermistor resistance in ohms, or -999.0f on error
  */
-static float calculate_thermistor_temperature_from_config(float adc_voltage, const thermistor_config_t *config)
+static float calculate_thermistor_resistance(float adc_voltage, const thermistor_config_t *config)
 {
   // Avoid division by zero
-  if (adc_voltage >= config->adc_voltage_reference)
+  if (adc_voltage >= config->adc_voltage_reference || adc_voltage < 0.0f)
   {
-    return -273.15f; // Absolute zero indicates error
+    return -999.0f; // Invalid voltage
   }
 
   // Calculate thermistor resistance using voltage divider equation
   // R_thermistor = R_series * (V_adc / (V_total - V_adc))
   float thermistor_resistance = config->series_resistor * (adc_voltage / (config->adc_voltage_reference - adc_voltage));
+
+  return thermistor_resistance;
+}
+
+/**
+ * @brief Calculate temperature from thermistor resistance using Steinhart-Hart equation
+ * @param thermistor_resistance Thermistor resistance in ohms
+ * @param config Pointer to thermistor configuration
+ * @return Temperature in Celsius
+ */
+static float calculate_temperature_from_resistance(float thermistor_resistance, const thermistor_config_t *config)
+{
+  if (thermistor_resistance <= 0.0f)
+  {
+    return -273.15f; // Absolute zero indicates error
+  }
 
   // Full Steinhart-Hart equation
   // 1/T = A + B * ln(R) + C * (ln(R))^3
@@ -207,31 +224,6 @@ static float read_thermistor_voltage(const thermistor_config_t *config)
   return voltage;
 }
 
-/**
- * @brief Calculate temperature from calibrated voltage using Steinhart-Hart equation
- * @param voltage Calibrated voltage from thermistor (0-3.3V)
- * @param config Pointer to thermistor configuration
- * @return Temperature in Celsius
- */
-static float calculate_temperature_from_voltage(float voltage, const thermistor_config_t *config)
-{
-  // Calculate temperature using Steinhart-Hart equation for thermistor
-  float temperature = calculate_thermistor_temperature_from_config(voltage, config);
-
-  // Check for invalid readings
-  if (temperature < -50.0f || temperature > 150.0f)
-  {
-    ESP_LOGW(TAG, "Invalid temperature reading: %.2f°C (Voltage: %.3fV)", temperature, voltage);
-    temperature = -999.0f; // Mark as invalid
-  }
-  else
-  {
-    ESP_LOGD(TAG, "Calculated temperature: %.2f°C (Voltage: %.3fV)", temperature, voltage);
-  }
-
-  return temperature;
-}
-
 // Temperature reading task handle
 static TaskHandle_t temp_task_handle = NULL;
 
@@ -260,12 +252,29 @@ static void temp_task(void *pvParameters)
       {
         // Read voltage from this sensor
         float voltage = read_thermistor_voltage(sensor->config);
-        float temperature = calculate_temperature_from_voltage(voltage, sensor->config);
+
+        // Calculate thermistor resistance from voltage
+        float resistance = calculate_thermistor_resistance(voltage, sensor->config);
+
+        // Calculate temperature from resistance using Steinhart-Hart equation
+        float temperature = calculate_temperature_from_resistance(resistance, sensor->config);
+
+        // Check for invalid readings
+        if (temperature < -50.0f || temperature > 150.0f)
+        {
+          ESP_LOGW(TAG, "Invalid temperature reading: %.2f°C (Voltage: %.3fV, Resistance: %.0fΩ)", temperature, voltage, resistance);
+          temperature = -999.0f; // Mark as invalid
+        }
+        else
+        {
+          ESP_LOGD(TAG, "Calculated temperature: %.2f°C (Voltage: %.3fV, Resistance: %.0fΩ)", temperature, voltage, resistance);
+        }
 
         // Create sample
         temp_sample_t sample = {
             .temperature = temperature,
             .voltage = voltage,
+            .resistance = resistance,
             .timestamp = xTaskGetTickCount() * portTICK_PERIOD_MS};
 
         // Store in buffer
@@ -423,7 +432,7 @@ void temp_sensor_init(void)
   // Initialize ADC calibration
   adc_cali_curve_fitting_config_t cali_config = {
       .unit_id = ADC_UNIT_1,
-      .atten = ADC_ATTEN_DB_12,
+      .atten = ADC_ATTEN_DB_6,
       .bitwidth = ADC_BITWIDTH_12,
   };
   ret = adc_cali_create_scheme_curve_fitting(&cali_config, &adc_cali_handle);
@@ -452,7 +461,7 @@ void temp_sensor_init(void)
 
   // Configure ADC1 channels for both sensors
   adc_oneshot_chan_cfg_t config = {
-      .atten = ADC_ATTEN_DB_12, // 0-3.3V range
+      .atten = ADC_ATTEN_DB_6, // 0-2.2V range for better resolution
       .bitwidth = ADC_BITWIDTH_12,
   };
 
@@ -621,6 +630,26 @@ float temp_sensor_get_voltage(temp_sensor_handle_t sensor)
   if (circular_buffer_get_latest(sensor->buffer, &sample))
   {
     return sample.voltage;
+  }
+  return -999.0f;
+}
+
+/**
+ * @brief Get the most recent thermistor resistance reading from a sensor
+ * @param sensor Handle to the temperature sensor
+ * @return Latest resistance in ohms, or -999.0f if no samples available or invalid sensor
+ */
+float temp_sensor_get_resistance(temp_sensor_handle_t sensor)
+{
+  if (sensor == NULL || sensor->buffer == NULL)
+  {
+    return -999.0f;
+  }
+
+  temp_sample_t sample;
+  if (circular_buffer_get_latest(sensor->buffer, &sample))
+  {
+    return sample.resistance;
   }
   return -999.0f;
 }

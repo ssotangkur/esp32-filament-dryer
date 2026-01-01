@@ -139,3 +139,40 @@ esp_err_t wifi_wait_for_connection(void)
 
   return ESP_FAIL;
 }
+
+// Get current IP address as string
+esp_err_t wifi_get_ip_address(char *ip_buffer, size_t buffer_size)
+{
+  if (ip_buffer == NULL || buffer_size < 16)
+  {
+    return ESP_ERR_INVALID_ARG;
+  }
+
+  // Get default netif
+  esp_netif_t *netif = esp_netif_get_default_netif();
+  if (netif == NULL)
+  {
+    // Not connected, return empty string
+    ip_buffer[0] = '\0';
+    return ESP_OK;
+  }
+
+  // Get IP info
+  esp_netif_ip_info_t ip_info;
+  esp_err_t ret = esp_netif_get_ip_info(netif, &ip_info);
+  if (ret != ESP_OK)
+  {
+    ip_buffer[0] = '\0';
+    return ret;
+  }
+
+  // Format IP address
+  if (snprintf(ip_buffer, buffer_size, IPSTR, IP2STR(&ip_info.ip)) >= (int)buffer_size)
+  {
+    // Buffer too small
+    ip_buffer[0] = '\0';
+    return ESP_ERR_INVALID_SIZE;
+  }
+
+  return ESP_OK;
+}

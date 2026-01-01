@@ -115,6 +115,13 @@ extern "C"
   float temp_sensor_get_voltage(temp_sensor_handle_t sensor);
 
   /**
+   * @brief Get the most recent thermistor resistance reading from a sensor
+   * @param sensor Handle to the temperature sensor
+   * @return Latest resistance in ohms, or -999.0f if no samples available or invalid sensor
+   */
+  float temp_sensor_get_resistance(temp_sensor_handle_t sensor);
+
+  /**
    * @brief Deinitialize temperature sensor (cleanup resources)
    * Stops background task and frees PSRAM buffer
    */

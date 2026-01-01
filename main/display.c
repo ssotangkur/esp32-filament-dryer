@@ -14,6 +14,7 @@
 #include "diagnostic.h"
 #include "display.h"
 #include "temp.h"
+#include "wifi.h"
 #include "version.h"
 
 // FPS display variables
@@ -21,8 +22,11 @@ static lv_obj_t *fps_label = NULL;
 static lv_timer_t *fps_update_timer = NULL;
 
 // Temperature display variables
-static lv_obj_t *temp_label = NULL;
-static lv_obj_t *voltage_label = NULL;
+static lv_obj_t *air_temp_label = NULL;
+static lv_obj_t *air_vr_label = NULL; // Air voltage|resistance
+static lv_obj_t *heater_temp_label = NULL;
+static lv_obj_t *heater_vr_label = NULL; // Heater voltage|resistance
+static lv_obj_t *ip_label = NULL;
 static lv_obj_t *temp_chart = NULL;
 static lv_chart_series_t *temp_series = NULL;
 static lv_timer_t *temp_update_timer = NULL;
@@ -48,63 +52,136 @@ static void fps_update_cb(lv_timer_t *timer)
 // Temperature display update callback
 static void temp_update_cb(lv_timer_t *timer)
 {
-  // Update temperature label
-  if (temp_label != NULL)
+  // Update air sensor temperature
+  if (air_temp_label != NULL)
   {
     temp_sensor_handle_t air_sensor = temp_sensor_get_air_sensor();
     if (air_sensor != NULL)
     {
-      // Get latest temperature from air sensor
       float temp = temp_sensor_get_reading(air_sensor);
 
       if (temp == -999.0f)
       {
         // No samples available yet
-        lv_label_set_text(temp_label, "Temp: --°C");
-        printf("Temperature: No samples available yet\n");
+        lv_label_set_text(air_temp_label, "Air: --°C");
+        printf("Air temperature: No samples available yet\n");
       }
       else
       {
         char buf[32];
 
-        // Use integer formatting to avoid float formatting issues
-        int temp_int = (int)(temp * 10); // Multiply by 10 to keep one decimal place
-        int whole = temp_int / 10;
-        int decimal = temp_int % 10;
-        lv_snprintf(buf, sizeof(buf), "Temp: %d.%d°C", whole, decimal);
+        // Format: Temperature with 1 decimal place
+        int temp_int = (int)(temp * 10);
+        int temp_whole = temp_int / 10;
+        int temp_decimal = temp_int % 10;
 
-        lv_label_set_text(temp_label, buf);
-        printf("Temperature updated: %.1f°C (display: %s)\n", temp, buf);
+        lv_snprintf(buf, sizeof(buf), "Air: %d.%d°C", temp_whole, temp_decimal);
+
+        lv_label_set_text(air_temp_label, buf);
+        printf("Air temperature updated: %.1f°C (display: %s)\n", temp, buf);
       }
     }
   }
 
-  // Update voltage label
-  if (voltage_label != NULL)
+  // Update air sensor voltage|resistance
+  if (air_vr_label != NULL)
   {
     temp_sensor_handle_t air_sensor = temp_sensor_get_air_sensor();
     if (air_sensor != NULL)
     {
-      // Get latest voltage reading from air sensor
       float voltage = temp_sensor_get_voltage(air_sensor);
+      float resistance = temp_sensor_get_resistance(air_sensor);
 
-      if (voltage == -999.0f)
+      if (voltage == -999.0f || resistance == -999.0f)
       {
         // No samples available yet
-        lv_label_set_text(voltage_label, "Volt: --V");
+        lv_label_set_text(air_vr_label, "Air: --V|--k");
+        printf("Air voltage/resistance: No samples available yet\n");
       }
       else
       {
         char buf[32];
 
-        // Use integer formatting to avoid float formatting issues
-        int voltage_int = (int)(voltage * 1000); // Multiply by 1000 to keep three decimal places
-        int whole = voltage_int / 1000;
-        int decimal = voltage_int % 1000;
-        lv_snprintf(buf, sizeof(buf), "Volt: %d.%03dV", whole, decimal);
+        // Format: Voltage (2 decimals) | Resistance (1 decimal in k)
+        int voltage_int = (int)(voltage * 100);
+        int voltage_whole = voltage_int / 100;
+        int voltage_decimal = voltage_int % 100;
 
-        lv_label_set_text(voltage_label, buf);
-        printf("Voltage updated: %.3fV (display: %s)\n", voltage, buf);
+        float resistance_kohm = resistance / 1000.0f;
+        int resistance_whole = (int)resistance_kohm;
+        int resistance_decimal = (int)((resistance_kohm - resistance_whole) * 10);
+
+        lv_snprintf(buf, sizeof(buf), "Air: %d.%02dV|%d.%dk", voltage_whole, voltage_decimal, resistance_whole, resistance_decimal);
+
+        lv_label_set_text(air_vr_label, buf);
+        printf("Air voltage/resistance updated: %.2fV|%.1fk (display: %s)\n", voltage, resistance_kohm, buf);
+      }
+    }
+  }
+
+  // Update heater sensor temperature
+  if (heater_temp_label != NULL)
+  {
+    temp_sensor_handle_t heater_sensor = temp_sensor_get_heater_sensor();
+    if (heater_sensor != NULL)
+    {
+      float temp = temp_sensor_get_reading(heater_sensor);
+
+      if (temp == -999.0f)
+      {
+        // No samples available yet
+        lv_label_set_text(heater_temp_label, "Heat: --°C");
+        printf("Heater temperature: No samples available yet\n");
+      }
+      else
+      {
+        char buf[32];
+
+        // Format: Temperature with 1 decimal place
+        int temp_int = (int)(temp * 10);
+        int temp_whole = temp_int / 10;
+        int temp_decimal = temp_int % 10;
+
+        lv_snprintf(buf, sizeof(buf), "Heat: %d.%d°C", temp_whole, temp_decimal);
+
+        lv_label_set_text(heater_temp_label, buf);
+        printf("Heater temperature updated: %.1f°C (display: %s)\n", temp, buf);
+      }
+    }
+  }
+
+  // Update heater sensor voltage|resistance
+  if (heater_vr_label != NULL)
+  {
+    temp_sensor_handle_t heater_sensor = temp_sensor_get_heater_sensor();
+    if (heater_sensor != NULL)
+    {
+      float voltage = temp_sensor_get_voltage(heater_sensor);
+      float resistance = temp_sensor_get_resistance(heater_sensor);
+
+      if (voltage == -999.0f || resistance == -999.0f)
+      {
+        // No samples available yet
+        lv_label_set_text(heater_vr_label, "Heat: --V|--k");
+        printf("Heater voltage/resistance: No samples available yet\n");
+      }
+      else
+      {
+        char buf[32];
+
+        // Format: Voltage (2 decimals) | Resistance (1 decimal in k)
+        int voltage_int = (int)(voltage * 100);
+        int voltage_whole = voltage_int / 100;
+        int voltage_decimal = voltage_int % 100;
+
+        float resistance_kohm = resistance / 1000.0f;
+        int resistance_whole = (int)resistance_kohm;
+        int resistance_decimal = (int)((resistance_kohm - resistance_whole) * 10);
+
+        lv_snprintf(buf, sizeof(buf), "Heat: %d.%02dV|%d.%dk", voltage_whole, voltage_decimal, resistance_whole, resistance_decimal);
+
+        lv_label_set_text(heater_vr_label, buf);
+        printf("Heater voltage/resistance updated: %.2fV|%.1fk (display: %s)\n", voltage, resistance_kohm, buf);
       }
     }
   }
@@ -139,6 +216,25 @@ static void temp_update_cb(lv_timer_t *timer)
       }
 
       lv_chart_refresh(temp_chart);
+    }
+  }
+
+  // Update IP address label
+  if (ip_label != NULL)
+  {
+    char ip_buffer[16];
+    esp_err_t ret = wifi_get_ip_address(ip_buffer, sizeof(ip_buffer));
+    if (ret == ESP_OK && ip_buffer[0] != '\0')
+    {
+      char buf[32];
+      lv_snprintf(buf, sizeof(buf), "IP: %s", ip_buffer);
+      lv_label_set_text(ip_label, buf);
+      printf("IP address updated: %s\n", ip_buffer);
+    }
+    else
+    {
+      lv_label_set_text(ip_label, "IP: Not connected");
+      printf("IP address: Not connected\n");
     }
   }
 }
@@ -341,15 +437,25 @@ void lvgl_demo(void)
   lv_label_set_text(version_label, "FW: " FIRMWARE_VERSION_STRING);
   lv_obj_set_pos(version_label, 10, 180); // Position above temperature display
 
-  /* Create temperature display label - moved up */
-  temp_label = lv_label_create(lv_scr_act());
-  lv_label_set_text(temp_label, "Temp: --°C");
-  lv_obj_set_pos(temp_label, 10, 200); // Moved up from 280
+  /* Create air temperature display label */
+  air_temp_label = lv_label_create(lv_scr_act());
+  lv_label_set_text(air_temp_label, "Air: --°C");
+  lv_obj_set_pos(air_temp_label, 10, 200); // Air temperature
 
-  /* Create voltage display label - after temperature */
-  voltage_label = lv_label_create(lv_scr_act());
-  lv_label_set_text(voltage_label, "Volt: --V");
-  lv_obj_set_pos(voltage_label, 10, 220); // Position after temperature
+  /* Create air voltage|resistance display label */
+  air_vr_label = lv_label_create(lv_scr_act());
+  lv_label_set_text(air_vr_label, "Air: --V|--k");
+  lv_obj_set_pos(air_vr_label, 10, 220); // Air voltage|resistance
+
+  /* Create heater temperature display label */
+  heater_temp_label = lv_label_create(lv_scr_act());
+  lv_label_set_text(heater_temp_label, "Heat: --°C");
+  lv_obj_set_pos(heater_temp_label, 10, 240); // Heater temperature
+
+  /* Create heater voltage|resistance display label */
+  heater_vr_label = lv_label_create(lv_scr_act());
+  lv_label_set_text(heater_vr_label, "Heat: --V|--k");
+  lv_obj_set_pos(heater_vr_label, 10, 260); // Heater voltage|resistance
 
   /* Create temperature chart */
   temp_chart = lv_chart_create(lv_scr_act());
@@ -363,10 +469,15 @@ void lvgl_demo(void)
   /* Create chart series */
   temp_series = lv_chart_add_series(temp_chart, lv_palette_main(LV_PALETTE_RED), LV_CHART_AXIS_PRIMARY_Y);
 
-  /* Create FPS display label - moved up */
+  /* Create IP address display label */
+  ip_label = lv_label_create(lv_scr_act());
+  lv_label_set_text(ip_label, "IP: Not connected");
+  lv_obj_set_pos(ip_label, 10, 280); // Position after temperature sensors
+
+  /* Create FPS display label */
   fps_label = lv_label_create(lv_scr_act());
   lv_label_set_text(fps_label, "FPS: 0");
-  lv_obj_set_pos(fps_label, 10, 240); // Moved up from 240 to make room
+  lv_obj_set_pos(fps_label, 10, 300); // Position after IP label
 
   /* Initialize temperature sensor */
   temp_sensor_init();
