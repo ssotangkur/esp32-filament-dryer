@@ -106,9 +106,18 @@ extern "C"
    * @brief Get temperature sample at specific index from a sensor (0 = oldest, buffer_count-1 = newest)
    * @param sensor Handle to the temperature sensor
    * @param index Sample index (0 to buffer_count-1)
-   * @return Temperature value, or -999.0f if invalid index or sensor
+   * @param[out] sample Pointer to temp_sample_t to fill with sample data
+   * @return true if sample was retrieved successfully, false otherwise
    */
-  float temp_sensor_get_sample(temp_sensor_handle_t sensor, size_t index);
+  bool temp_sensor_get_sample(temp_sensor_handle_t sensor, size_t index, temp_sample_t *sample);
+
+  /**
+   * @brief Get the most recent complete temperature sample from a sensor
+   * @param sensor Handle to the temperature sensor
+   * @param[out] sample Pointer to temp_sample_t to fill with sample data
+   * @return true if sample was retrieved successfully, false otherwise
+   */
+  bool temp_sensor_get_latest_sample(temp_sensor_handle_t sensor, temp_sample_t *sample);
 
   /**
    * @brief Get number of stored temperature samples from a sensor

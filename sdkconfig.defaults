@@ -40,6 +40,9 @@ CONFIG_LV_USE_DEMO_BENCHMARK=y
 CONFIG_LV_USE_DEMO_STRESS=y
 CONFIG_LV_USE_DEMO_MUSIC=y
 
+# HTTP Server WebSocket Support
+CONFIG_HTTPD_WS_SUPPORT=y
+
 # OTA Configuration
 CONFIG_OTA_TASK_STACK_SIZE=8192
 # Rollback protection (auto-rollback on failure) - enabled for development safety

@@ -206,11 +206,11 @@ static void temp_update_cb(lv_timer_t *timer)
         // Add points to chart (oldest to newest)
         for (size_t i = 0; i < points_to_show; i++)
         {
-          float temp_val = temp_sensor_get_sample(air_sensor, sample_count - points_to_show + i);
-          if (temp_val != -999.0f)
+          temp_sample_t sample;
+          if (temp_sensor_get_sample(air_sensor, sample_count - points_to_show + i, &sample))
           {
             // Convert to integer for chart (multiply by 10 to preserve one decimal)
-            lv_chart_set_next_value(temp_chart, temp_series, (int32_t)(temp_val * 10));
+            lv_chart_set_next_value(temp_chart, temp_series, (int32_t)(sample.temperature * 10));
           }
         }
       }

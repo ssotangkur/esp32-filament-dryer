@@ -14,11 +14,12 @@
 #include "sysmon_wrapper.h"
 #include "circular_buffer.h"
 #include "temp.h"
+#include "web_server.h"
 
 static const char *TAG = "TEMP";
 
 #define TEMP_BUFFER_SIZE 100
-#define TEMP_TASK_STACK_SIZE 2048
+#define TEMP_TASK_STACK_SIZE 4096
 #define TEMP_TASK_PRIORITY 2
 #define TEMP_READ_INTERVAL_MS 1000 // Read temperature every second
 #define TEMP_AVERAGE_SAMPLES 250   // Number of ADC samples to average for noise reduction
@@ -278,6 +279,9 @@ static void temp_task(void *pvParameters)
         vTaskDelay(pdMS_TO_TICKS(10));
       }
     }
+
+    // Broadcast latest sensor readings to all WebSocket subscribers
+    ws_broadcast_latest_sensor_data();
 
     // Wait for next reading interval
     vTaskDelay(pdMS_TO_TICKS(TEMP_READ_INTERVAL_MS));
@@ -573,21 +577,33 @@ float temp_sensor_get_reading(temp_sensor_handle_t sensor)
  * @brief Get temperature sample at specific index from a sensor (0 = oldest, buffer_count-1 = newest)
  * @param sensor Handle to the temperature sensor
  * @param index Sample index (0 to buffer_count-1)
- * @return Temperature value, or -999.0f if invalid index or sensor
+ * @param[out] sample Pointer to temp_sample_t to fill with sample data
+ * @return true if sample was retrieved successfully, false otherwise
  */
-float temp_sensor_get_sample(temp_sensor_handle_t sensor, size_t index)
+bool temp_sensor_get_sample(temp_sensor_handle_t sensor, size_t index, temp_sample_t *sample)
 {
-  if (sensor == NULL || sensor->buffer == NULL)
+  if (sensor == NULL || sensor->buffer == NULL || sample == NULL)
   {
-    return -999.0f;
+    return false;
   }
 
-  temp_sample_t sample;
-  if (circular_buffer_get_at_index(sensor->buffer, index, &sample))
+  return circular_buffer_get_at_index(sensor->buffer, index, sample);
+}
+
+/**
+ * @brief Get the most recent complete temperature sample from a sensor
+ * @param sensor Handle to the temperature sensor
+ * @param[out] sample Pointer to temp_sample_t to fill with sample data
+ * @return true if sample was retrieved successfully, false otherwise
+ */
+bool temp_sensor_get_latest_sample(temp_sensor_handle_t sensor, temp_sample_t *sample)
+{
+  if (sensor == NULL || sensor->buffer == NULL || sample == NULL)
   {
-    return sample.temperature;
+    return false;
   }
-  return -999.0f;
+
+  return circular_buffer_get_latest(sensor->buffer, sample);
 }
 
 /**
