@@ -38,6 +38,7 @@ example/sdkconfig.old
 include/wifi_credentials.h
 
 # Node.js dependencies
+node_modules/
 ota-server/node_modules/
 
 # Make sure we include the sample config
