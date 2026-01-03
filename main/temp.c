@@ -33,15 +33,6 @@ typedef struct
   uint16_t averaging_samples;     // Number of ADC samples to average
 } thermistor_config_t;
 
-// Temperature sample structure
-typedef struct
-{
-  float temperature;
-  float voltage;    // Calibrated and manually adjusted ADC voltage
-  float resistance; // Thermistor resistance in ohms
-  uint32_t timestamp;
-} temp_sample_t;
-
 // Sensor information for the task
 typedef struct
 {
@@ -681,6 +672,24 @@ void temp_sensor_deinit(void)
   }
 
   ESP_LOGI(TAG, "Temperature sensor deinitialized");
+}
+
+/**
+ * @brief Get pointer to air temperature circular buffer (for web server)
+ * @return Pointer to air temperature buffer, or NULL if not initialized
+ */
+circular_buffer_t *get_air_temp_buffer(void)
+{
+  return circular_buffer_count(&temp_buffer_1) > 0 ? &temp_buffer_1 : NULL;
+}
+
+/**
+ * @brief Get pointer to heater temperature circular buffer (for web server)
+ * @return Pointer to heater temperature buffer, or NULL if not initialized
+ */
+circular_buffer_t *get_heater_temp_buffer(void)
+{
+  return circular_buffer_count(&temp_buffer_2) > 0 ? &temp_buffer_2 : NULL;
 }
 
 // Note: ADC averaging buffer is freed by the task itself when it exits

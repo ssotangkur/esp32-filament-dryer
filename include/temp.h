@@ -3,6 +3,7 @@
 
 #include <stddef.h>
 #include <stdbool.h>
+#include "circular_buffer.h"
 
 #ifdef __cplusplus
 extern "C"
@@ -54,6 +55,15 @@ extern "C"
     float B; // Second coefficient
     float C; // Third coefficient
   } steinhart_hart_coeffs_t;
+
+  // Temperature sample structure
+  typedef struct
+  {
+    float temperature;
+    float voltage;    // Calibrated and manually adjusted ADC voltage
+    float resistance; // Thermistor resistance in ohms
+    uint32_t timestamp;
+  } temp_sample_t;
 
   /**
    * @brief Calculate Steinhart-Hart coefficients from three temperature-resistance data points
@@ -126,6 +136,18 @@ extern "C"
    * Stops background task and frees PSRAM buffer
    */
   void temp_sensor_deinit(void);
+
+  /**
+   * @brief Get pointer to air temperature circular buffer (for web server)
+   * @return Pointer to air temperature buffer, or NULL if not initialized
+   */
+  circular_buffer_t *get_air_temp_buffer(void);
+
+  /**
+   * @brief Get pointer to heater temperature circular buffer (for web server)
+   * @return Pointer to heater temperature buffer, or NULL if not initialized
+   */
+  circular_buffer_t *get_heater_temp_buffer(void);
 
 #ifdef __cplusplus
 }

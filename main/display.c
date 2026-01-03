@@ -78,7 +78,7 @@ static void temp_update_cb(lv_timer_t *timer)
         lv_snprintf(buf, sizeof(buf), "Air: %d.%d°C", temp_whole, temp_decimal);
 
         lv_label_set_text(air_temp_label, buf);
-        printf("Air temperature updated: %.1f°C (display: %s)\n", temp, buf);
+        // printf("Air temperature updated: %.1f°C (display: %s)\n", temp, buf);
       }
     }
   }
@@ -114,7 +114,7 @@ static void temp_update_cb(lv_timer_t *timer)
         lv_snprintf(buf, sizeof(buf), "Air: %d.%02dV|%d.%dk", voltage_whole, voltage_decimal, resistance_whole, resistance_decimal);
 
         lv_label_set_text(air_vr_label, buf);
-        printf("Air voltage/resistance updated: %.2fV|%.1fk (display: %s)\n", voltage, resistance_kohm, buf);
+        // printf("Air voltage/resistance updated: %.2fV|%.1fk (display: %s)\n", voltage, resistance_kohm, buf);
       }
     }
   }
@@ -145,7 +145,7 @@ static void temp_update_cb(lv_timer_t *timer)
         lv_snprintf(buf, sizeof(buf), "Heat: %d.%d°C", temp_whole, temp_decimal);
 
         lv_label_set_text(heater_temp_label, buf);
-        printf("Heater temperature updated: %.1f°C (display: %s)\n", temp, buf);
+        // printf("Heater temperature updated: %.1f°C (display: %s)\n", temp, buf);
       }
     }
   }
@@ -181,7 +181,7 @@ static void temp_update_cb(lv_timer_t *timer)
         lv_snprintf(buf, sizeof(buf), "Heat: %d.%02dV|%d.%dk", voltage_whole, voltage_decimal, resistance_whole, resistance_decimal);
 
         lv_label_set_text(heater_vr_label, buf);
-        printf("Heater voltage/resistance updated: %.2fV|%.1fk (display: %s)\n", voltage, resistance_kohm, buf);
+        // printf("Heater voltage/resistance updated: %.2fV|%.1fk (display: %s)\n", voltage, resistance_kohm, buf);
       }
     }
   }
@@ -229,7 +229,7 @@ static void temp_update_cb(lv_timer_t *timer)
       char buf[32];
       lv_snprintf(buf, sizeof(buf), "IP: %s", ip_buffer);
       lv_label_set_text(ip_label, buf);
-      printf("IP address updated: %s\n", ip_buffer);
+      // printf("IP address updated: %s\n", ip_buffer);
     }
     else
     {
