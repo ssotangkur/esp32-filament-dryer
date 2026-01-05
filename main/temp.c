@@ -658,7 +658,7 @@ float temp_sensor_get_resistance(temp_sensor_handle_t sensor)
 /**
  * @brief Deinitialize temperature sensor (cleanup resources)
  */
-void temp_sensor_deinit(void)
+void temp_sensor_free(void)
 {
   if (temp_task_handle != NULL)
   {

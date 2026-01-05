@@ -322,18 +322,10 @@ static void ws_send_ping_to_clients(void)
     return;
   }
 
-  httpd_ws_frame_t ping_frame = {
-      .final = true,
-      .fragmented = false,
-      .type = HTTPD_WS_TYPE_PING,
-      .payload = NULL,
-      .len = 0};
-
   // Send ping to all clients synchronously since we can't use async outside handler context
   // Note: This may block, but ping frames are small and infrequent
   for (int i = 0; i < ws_client_count; i++)
   {
-    int sockfd = ws_client_fds[i];
     // We don't have req context here, so we need to create a dummy req or use a different approach
     // For now, skip ping functionality until we can implement it properly
     ESP_LOGD(TAG, "Ping functionality disabled - requires httpd_req_t context");

@@ -151,7 +151,7 @@ extern "C"
    * @brief Deinitialize temperature sensor (cleanup resources)
    * Stops background task and frees PSRAM buffer
    */
-  void temp_sensor_deinit(void);
+  void temp_sensor_free(void);
 
 #ifdef __cplusplus
 }
