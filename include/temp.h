@@ -153,18 +153,6 @@ extern "C"
    */
   void temp_sensor_deinit(void);
 
-  /**
-   * @brief Get pointer to air temperature circular buffer (for web server)
-   * @return Pointer to air temperature buffer, or NULL if not initialized
-   */
-  circular_buffer_t *get_air_temp_buffer(void);
-
-  /**
-   * @brief Get pointer to heater temperature circular buffer (for web server)
-   * @return Pointer to heater temperature buffer, or NULL if not initialized
-   */
-  circular_buffer_t *get_heater_temp_buffer(void);
-
 #ifdef __cplusplus
 }
 #endif
