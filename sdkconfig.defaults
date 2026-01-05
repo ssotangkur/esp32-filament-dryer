@@ -48,3 +48,7 @@ CONFIG_HTTPD_WS_SUPPORT=y
 CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y
 # Anti-rollback (prevents downgrades) - disabled for development flexibility
 # CONFIG_BOOTLOADER_APP_ANTI_ROLLBACK=y
+
+# SYSMON Configuration
+# Need to change the default control port so we can start another http server
+CONFIG_SYSMON_HTTPD_CTRL_PORT=32767

@@ -40,9 +40,7 @@ void app_main(void)
 
     // Initialize system monitor after WiFi is connected (without HTTP server)
 #ifdef CONFIG_ENABLE_SYSMON
-    // Disable sysmon HTTP server to avoid conflicts with our web UI
-    // ESP_ERROR_CHECK(sysmon_init());
-    ESP_LOGI("MAIN", "Sysmon HTTP server disabled to avoid conflicts");
+    ESP_ERROR_CHECK(sysmon_init());
 #endif
 
     // Initialize LCD display
