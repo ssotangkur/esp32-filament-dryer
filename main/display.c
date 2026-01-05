@@ -479,9 +479,6 @@ void lvgl_demo(void)
   lv_label_set_text(fps_label, "FPS: 0");
   lv_obj_set_pos(fps_label, 10, 300); // Position after IP label
 
-  /* Initialize temperature sensor */
-  temp_sensor_init();
-
   /* Start temperature display update timer (update every 1000ms) */
   temp_update_timer = lv_timer_create(temp_update_cb, 1000, NULL);
 
