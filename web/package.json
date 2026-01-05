@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "set NO_COLOR=1&&vite build --logLevel warn",
     "preview": "vite preview"
   },
   "dependencies": {

@@ -38,6 +38,13 @@ extern "C"
 #define HEATER_TEMP_SERIES_RESISTOR 100000.0f  // 100kΩ series resistor
 #define HEATER_TEMP_ADC_VOLTAGE_REFERENCE 3.3f // 3.3V ADC reference voltage
 
+// Temperature sensor system configuration
+#define TEMP_BUFFER_SIZE 5
+#define TEMP_TASK_STACK_SIZE 4096
+#define TEMP_TASK_PRIORITY 2
+#define TEMP_READ_INTERVAL_MS 1000 // Read temperature every second
+#define TEMP_AVERAGE_SAMPLES 250   // Number of ADC samples to average for noise reduction
+
   // Temperature sensor handle (opaque type for object-oriented API)
   typedef struct temp_sensor_handle *temp_sensor_handle_t;
 

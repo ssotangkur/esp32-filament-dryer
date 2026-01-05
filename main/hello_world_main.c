@@ -57,26 +57,5 @@ void app_main(void)
     // Start FPS monitoring
     fps_monitor_start();
 
-    // Create LVGL demo
-    // lv_demo_widgets();
-
     lvgl_demo();
-
-    // Keep the app running
-    // while (1)
-    // {
-    //     // Reset watchdog timer regularly
-    //     vTaskDelay(pdMS_TO_TICKS(100));
-
-    //     // Print diagnostic info less frequently to avoid watchdog issues
-    //     static int counter = 0;
-    //     counter++;
-    //     if (counter >= 30)
-    //     { // Every 3 seconds (30 * 100ms)
-    //         print_memory_info();
-    //         print_fps_info();
-    //         printf("LVGL demo running...\n");
-    //         counter = 0;
-    //     }
-    // }
 }

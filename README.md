@@ -314,6 +314,63 @@ The partition table includes:
 - `ota_0` & `ota_1`: Alternating update partitions
 - `ota_data`: Stores which partition is active
 
+## Web Development
+
+The project includes a web interface built with React and Vite for monitoring and controlling the filament dryer remotely.
+
+### Development Setup
+
+1. **Install web dependencies:**
+   ```bash
+   cd web
+   npm install
+   cd ..
+   ```
+
+2. **Configure device IP for proxying:**
+   The Vite dev server proxies API and WebSocket requests to your ESP32 device. Create a `.env` file in the `web` directory:
+
+   ```bash
+   cd web
+   cp .env.example .env  # If .env.example exists, otherwise create manually
+   ```
+
+   Edit `web/.env` and set your device's IP address:
+   ```
+   VITE_DEVICE_IP=192.168.1.100  # Replace with your ESP32's actual IP address
+   ```
+
+3. **Start the development server:**
+   ```bash
+   cd web
+   npm run dev
+   ```
+
+4. **Access the web interface:**
+   Open your browser to `http://localhost:5173` (or the port shown in the terminal).
+
+### Proxy Configuration
+
+The Vite development server automatically proxies the following requests to your ESP32 device:
+
+- **API requests** (`/api/*`) → `http://YOUR_DEVICE_IP:3000/api/*`
+- **WebSocket connections** (`/ws/*`) → `ws://YOUR_DEVICE_IP:3000/ws/*`
+
+This allows the web interface to communicate with the ESP32 device during development, even when the device has a dynamic IP address.
+
+### Available Endpoints
+
+The ESP32 device provides the following API endpoints:
+
+- **GET** `/api/version` - Returns firmware version information
+- **WebSocket** `/ws/sensor-data` - Real-time temperature sensor data
+
+### Environment Variables
+
+- `VITE_DEVICE_IP` - IP address of your ESP32 device (required for development proxy)
+
+Note: The `web/.env` file is gitignored to prevent committing device-specific IP addresses.
+
 ## Development
 
 - Use `esp_idf_shell.bat` prefix for all ESP-IDF commands
