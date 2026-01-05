@@ -14,6 +14,10 @@ static EventGroupHandle_t wifi_event_group;
 #define WIFI_CONNECTED_BIT BIT0
 #define WIFI_FAIL_BIT BIT1
 
+// WiFi retry variables
+static int wifi_retry_count = 0;
+static const int MAX_WIFI_RETRIES = 5;
+
 // Event handler for WiFi events
 static void wifi_event_handler(void *arg, esp_event_base_t event_base,
                                int32_t event_id, void *event_data)
@@ -21,18 +25,33 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base,
   if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START)
   {
     ESP_LOGI(TAG, "WiFi STA started, connecting to AP...");
+    wifi_retry_count = 0; // Reset retry count on start
     esp_wifi_connect();
   }
   else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED)
   {
     wifi_event_sta_disconnected_t *disconn = (wifi_event_sta_disconnected_t *)event_data;
     ESP_LOGI(TAG, "WiFi disconnected, reason: %d", disconn->reason);
-    xEventGroupSetBits(wifi_event_group, WIFI_FAIL_BIT);
+
+    if (wifi_retry_count < MAX_WIFI_RETRIES)
+    {
+      wifi_retry_count++;
+      int delay_ms = (1 << (wifi_retry_count - 1)) * 1000; // Exponential backoff: 1s, 2s, 4s, 8s, 16s
+      ESP_LOGI(TAG, "Retrying WiFi connection in %d ms (attempt %d/%d)", delay_ms, wifi_retry_count, MAX_WIFI_RETRIES);
+      vTaskDelay(pdMS_TO_TICKS(delay_ms));
+      esp_wifi_connect();
+    }
+    else
+    {
+      ESP_LOGI(TAG, "Max WiFi retries exceeded, giving up");
+      xEventGroupSetBits(wifi_event_group, WIFI_FAIL_BIT);
+    }
   }
   else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP)
   {
     ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
     ESP_LOGI(TAG, "Got IP: " IPSTR, IP2STR(&event->ip_info.ip));
+    wifi_retry_count = 0; // Reset retry count on successful connection
     xEventGroupSetBits(wifi_event_group, WIFI_CONNECTED_BIT);
   }
 }
