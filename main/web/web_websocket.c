@@ -6,13 +6,23 @@
 #include <string.h>
 #include <stdlib.h>
 
+// Forward declaration for temp_sensor_subscription struct
+struct temp_sensor_subscription;
+
 static const char *TAG = "web_server";
 
-// WebSocket client registry for sensor data subscriptions
-#define MAX_WS_CLIENTS 8
-static int ws_client_fds[MAX_WS_CLIENTS];
-static SemaphoreHandle_t ws_clients_mutex = NULL;
-static int ws_client_count = 0;
+// Context structure for sensor callbacks
+typedef struct
+{
+  struct ws_session_ctx *session;
+  const char *sensor_type;
+} sensor_callback_ctx_t;
+
+// Context structure for queued send work
+typedef struct
+{
+  char json_data[256]; // Copy of the data to send
+} send_work_ctx_t;
 
 // WebSocket session context for handling fragmented messages
 struct ws_session_ctx
@@ -20,9 +30,61 @@ struct ws_session_ctx
   char *buffer;
   size_t len;
   bool accumulating_text;
-  int sockfd;              // Store the socket fd for reliable access
-  bool handshake_complete; // Track if WebSocket handshake is fully complete
+  int sockfd;                                     // Store the socket fd for reliable access
+  bool handshake_complete;                        // Track if WebSocket handshake is fully complete
+  temp_sensor_subscription_t air_subscription;    // Air sensor subscription token
+  temp_sensor_subscription_t heater_subscription; // Heater sensor subscription token
+  sensor_callback_ctx_t *air_context;             // Air sensor callback context (for cleanup)
+  sensor_callback_ctx_t *heater_context;          // Heater sensor callback context (for cleanup)
 };
+
+/**
+ * @brief Generic callback function for sensor updates with per-client context
+ * @param sample Pointer to temperature sample (caller owns the memory)
+ * @param context Pointer to sensor_callback_ctx_t (callback context)
+ */
+static void websocket_sensor_callback(temp_sample_t *sample, void *context)
+{
+  sensor_callback_ctx_t *callback_ctx = (sensor_callback_ctx_t *)context;
+
+  // Validate context and sample
+  if (sample == NULL || callback_ctx == NULL || callback_ctx->session == NULL || !callback_ctx->session->handshake_complete)
+  {
+    return;
+  }
+
+  struct ws_session_ctx *session = callback_ctx->session;
+  const char *sensor_type = callback_ctx->sensor_type;
+
+  // Format as JSON array with single sample
+  char json_data[128];
+  snprintf(json_data, sizeof(json_data), "[{\"sensor\":\"%s\",\"temperature\":%.2f,\"timestamp\":%lu}]",
+           sensor_type, sample->temperature, (unsigned long)sample->timestamp);
+
+  // Send directly to this specific client
+  send_work_ctx_t ctx = {.json_data = {0}};
+  strncpy(ctx.json_data, json_data, sizeof(ctx.json_data) - 1);
+
+  // Queue work to send to this specific client
+  httpd_ws_frame_t ws_resp = {
+      .final = true,
+      .fragmented = false,
+      .type = HTTPD_WS_TYPE_TEXT,
+      .payload = (uint8_t *)ctx.json_data,
+      .len = strlen(ctx.json_data)};
+
+  esp_err_t ret = httpd_ws_send_frame_async(server, session->sockfd, &ws_resp);
+  if (ret != ESP_OK)
+  {
+    // Client may have disconnected - log at debug level to avoid spam
+    ESP_LOGD(TAG, "Failed to send sensor data to WebSocket client fd=%d: %s (client may have disconnected)", session->sockfd, esp_err_to_name(ret));
+    // Don't mark session as disconnected here - let the main handler detect it
+  }
+  else
+  {
+    ESP_LOGD(TAG, "Sent sensor data to WebSocket client fd=%d", session->sockfd);
+  }
+}
 
 // Get or create session context for WebSocket connections
 static esp_err_t get_or_create_session_context(httpd_req_t *req, struct ws_session_ctx **session_out)
@@ -52,6 +114,34 @@ static void cleanup_session_context(httpd_req_t *req, struct ws_session_ctx *ses
 {
   if (sess != NULL)
   {
+    // Unsubscribe from sensors before cleanup
+    temp_sensor_handle_t air_sensor = temp_sensor_get_air_sensor();
+    temp_sensor_handle_t heater_sensor = temp_sensor_get_heater_sensor();
+
+    // Unsubscribe from air sensor and free context
+    if (air_sensor != NULL && sess->air_subscription != NULL)
+    {
+      temp_sensor_unsubscribe(air_sensor, sess->air_subscription);
+      sess->air_subscription = NULL;
+    }
+    if (sess->air_context != NULL)
+    {
+      free(sess->air_context); // Free the sensor_callback_ctx_t
+      sess->air_context = NULL;
+    }
+
+    // Unsubscribe from heater sensor and free context
+    if (heater_sensor != NULL && sess->heater_subscription != NULL)
+    {
+      temp_sensor_unsubscribe(heater_sensor, sess->heater_subscription);
+      sess->heater_subscription = NULL;
+    }
+    if (sess->heater_context != NULL)
+    {
+      free(sess->heater_context); // Free the sensor_callback_ctx_t
+      sess->heater_context = NULL;
+    }
+
     // Clean up session context
     if (sess->buffer)
     {
@@ -62,336 +152,19 @@ static void cleanup_session_context(httpd_req_t *req, struct ws_session_ctx *ses
   }
 }
 
-// Initialize WebSocket client registry
+// Initialize WebSocket client registry (no-op since we removed the registry)
 esp_err_t ws_clients_init(void)
 {
-  ws_clients_mutex = xSemaphoreCreateMutex();
-  if (ws_clients_mutex == NULL)
-  {
-    ESP_LOGE(TAG, "Failed to create WebSocket clients mutex");
-    return ESP_ERR_NO_MEM;
-  }
-
-  // Initialize client array
-  memset(ws_client_fds, 0, sizeof(ws_client_fds));
-  ws_client_count = 0;
-
-  ESP_LOGI(TAG, "WebSocket client registry initialized");
+  ESP_LOGI(TAG, "WebSocket client registry removed - using per-client callbacks");
   return ESP_OK;
-}
-
-// Add a WebSocket client to the registry
-static esp_err_t ws_client_add(int sockfd)
-{
-  if (xSemaphoreTake(ws_clients_mutex, pdMS_TO_TICKS(1000)) != pdTRUE)
-  {
-    ESP_LOGE(TAG, "Failed to take WebSocket clients mutex");
-    return ESP_ERR_TIMEOUT;
-  }
-
-  // Check if already registered
-  for (int i = 0; i < ws_client_count; i++)
-  {
-    if (ws_client_fds[i] == sockfd)
-    {
-      xSemaphoreGive(ws_clients_mutex);
-      return ESP_OK; // Already registered
-    }
-  }
-
-  // Add new client if space available
-  if (ws_client_count < MAX_WS_CLIENTS)
-  {
-    ws_client_fds[ws_client_count] = sockfd;
-    ws_client_count++;
-    ESP_LOGI(TAG, "WebSocket client added: fd=%d, total clients=%d", sockfd, ws_client_count);
-    xSemaphoreGive(ws_clients_mutex);
-    return ESP_OK;
-  }
-  else
-  {
-    ESP_LOGW(TAG, "WebSocket client registry full, cannot add fd=%d", sockfd);
-    xSemaphoreGive(ws_clients_mutex);
-    return ESP_ERR_NO_MEM;
-  }
-}
-
-// Remove a WebSocket client from the registry
-static void ws_client_remove(int sockfd)
-{
-  if (xSemaphoreTake(ws_clients_mutex, pdMS_TO_TICKS(1000)) != pdTRUE)
-  {
-    ESP_LOGE(TAG, "Failed to take WebSocket clients mutex for removal");
-    return;
-  }
-
-  for (int i = 0; i < ws_client_count; i++)
-  {
-    if (ws_client_fds[i] == sockfd)
-    {
-      // Shift remaining clients
-      for (int j = i; j < ws_client_count - 1; j++)
-      {
-        ws_client_fds[j] = ws_client_fds[j + 1];
-      }
-      ws_client_count--;
-      ws_client_fds[ws_client_count] = 0; // Clear last slot
-      ESP_LOGI(TAG, "WebSocket client removed: fd=%d, remaining clients=%d", sockfd, ws_client_count);
-      break;
-    }
-  }
-
-  xSemaphoreGive(ws_clients_mutex);
-}
-
-// Context structure for queued broadcast work
-typedef struct
-{
-  char json_data[256]; // Copy of the data to broadcast
-} broadcast_work_ctx_t;
-
-// Work function to broadcast sensor data (executed in HTTP server context)
-static void broadcast_work_function(void *arg)
-{
-  broadcast_work_ctx_t *ctx = (broadcast_work_ctx_t *)arg;
-  if (ctx == NULL)
-  {
-    ESP_LOGE(TAG, "Broadcast work context is NULL");
-    return;
-  }
-
-  if (xSemaphoreTake(ws_clients_mutex, pdMS_TO_TICKS(100)) != pdTRUE)
-  {
-    ESP_LOGE(TAG, "Failed to take WebSocket clients mutex for broadcast");
-    free(ctx);
-    return;
-  }
-
-  httpd_ws_frame_t ws_resp = {
-      .final = true,
-      .fragmented = false,
-      .type = HTTPD_WS_TYPE_TEXT,
-      .payload = (uint8_t *)ctx->json_data,
-      .len = strlen(ctx->json_data)};
-
-  // Send to all clients synchronously (since httpd_ws_send_frame_async is actually synchronous)
-  for (int i = 0; i < ws_client_count; i++)
-  {
-    int sockfd = ws_client_fds[i];
-    esp_err_t ret = httpd_ws_send_frame_async(server, sockfd, &ws_resp);
-    if (ret != ESP_OK)
-    {
-      ESP_LOGW(TAG, "Failed to broadcast to WebSocket client fd=%d: %s", sockfd, esp_err_to_name(ret));
-      // Immediately remove disconnected client
-      ws_client_remove(sockfd);
-      i--; // Adjust loop counter
-    }
-    else
-    {
-      ESP_LOGD(TAG, "Broadcasted sensor data to client fd=%d", sockfd);
-    }
-  }
-
-  ESP_LOGD(TAG, "Broadcast work completed for %d clients", ws_client_count);
-  xSemaphoreGive(ws_clients_mutex);
-  free(ctx); // Safe to free now since httpd_ws_send_frame_async is synchronous
-}
-
-// Broadcast sensor data to all subscribed WebSocket clients using queued work
-static void ws_broadcast_sensor_data(const char *json_data)
-{
-  // Check if server is initialized
-  if (server == NULL)
-  {
-    ESP_LOGW(TAG, "Cannot broadcast - HTTP server not initialized");
-    return;
-  }
-
-  // Allocate work context
-  broadcast_work_ctx_t *ctx = malloc(sizeof(broadcast_work_ctx_t));
-  if (ctx == NULL)
-  {
-    ESP_LOGE(TAG, "Failed to allocate broadcast work context");
-    return;
-  }
-
-  // Copy the data
-  strncpy(ctx->json_data, json_data, sizeof(ctx->json_data) - 1);
-  ctx->json_data[sizeof(ctx->json_data) - 1] = '\0';
-
-  // Queue the work to be executed in HTTP server context
-  esp_err_t ret = httpd_queue_work(server, broadcast_work_function, ctx);
-  if (ret != ESP_OK)
-  {
-    ESP_LOGE(TAG, "Failed to queue broadcast work: %s", esp_err_to_name(ret));
-    free(ctx);
-  }
-  else
-  {
-    ESP_LOGD(TAG, "Queued broadcast work for sensor data");
-  }
-}
-
-// Send initial sensor data to a specific WebSocket client
-static void ws_send_initial_data(httpd_req_t *req, int sockfd)
-{
-  // Get sensor handles
-  temp_sensor_handle_t air_sensor = temp_sensor_get_air_sensor();
-  temp_sensor_handle_t heater_sensor = temp_sensor_get_heater_sensor();
-
-  // Allocate larger buffer for all historical data (TEMP_BUFFER_SIZE * 2 sensors * ~100 chars per sample)
-  size_t buffer_size = (TEMP_BUFFER_SIZE * 2 * 120) + 10; // Extra space for brackets and commas
-  char *json_data = malloc(buffer_size);
-  if (json_data == NULL)
-  {
-    ESP_LOGE(TAG, "Failed to allocate memory for initial sensor data");
-    return;
-  }
-
-  strcpy(json_data, "[");
-
-  int count = 0;
-
-  // Send all samples from air sensor
-  if (air_sensor)
-  {
-    size_t air_count = temp_sensor_get_sample_count(air_sensor);
-    for (size_t i = 0; i < air_count; i++)
-    {
-      if (count > 0)
-        strcat(json_data, ",");
-      temp_sample_t sample;
-      if (temp_sensor_get_sample(air_sensor, i, &sample))
-      {
-        char item[128];
-        snprintf(item, sizeof(item), "{\"sensor\":\"air\",\"temperature\":%.2f,\"timestamp\":%lu}", sample.temperature, (unsigned long)sample.timestamp);
-        strcat(json_data, item);
-        count++;
-      }
-    }
-  }
-
-  // Send all samples from heater sensor
-  if (heater_sensor)
-  {
-    size_t heater_count = temp_sensor_get_sample_count(heater_sensor);
-    for (size_t i = 0; i < heater_count; i++)
-    {
-      if (count > 0)
-        strcat(json_data, ",");
-      temp_sample_t sample;
-      if (temp_sensor_get_sample(heater_sensor, i, &sample))
-      {
-        char item[128];
-        snprintf(item, sizeof(item), "{\"sensor\":\"heater\",\"temperature\":%.2f,\"timestamp\":%lu}", sample.temperature, (unsigned long)sample.timestamp);
-        strcat(json_data, item);
-        count++;
-      }
-    }
-  }
-
-  strcat(json_data, "]");
-
-  httpd_ws_frame_t ws_resp = {
-      .final = true,
-      .fragmented = false,
-      .type = HTTPD_WS_TYPE_TEXT,
-      .payload = (uint8_t *)json_data,
-      .len = strlen(json_data)};
-
-  esp_err_t ret = httpd_ws_send_frame(req, &ws_resp);
-  if (ret != ESP_OK)
-  {
-    ESP_LOGW(TAG, "Failed to send initial data to WebSocket client fd=%d: %s", sockfd, esp_err_to_name(ret));
-  }
-  else
-  {
-    ESP_LOGI(TAG, "Sent initial sensor data to WebSocket client fd=%d (%d samples)", sockfd, count);
-  }
-
-  // Free the allocated buffer
-  free(json_data);
-}
-
-// Send ping frames to all connected WebSocket clients for heartbeat monitoring
-static void ws_send_ping_to_clients(void)
-{
-  if (xSemaphoreTake(ws_clients_mutex, pdMS_TO_TICKS(100)) != pdTRUE)
-  {
-    ESP_LOGE(TAG, "Failed to take WebSocket clients mutex for ping");
-    return;
-  }
-
-  // Send ping to all clients synchronously since we can't use async outside handler context
-  // Note: This may block, but ping frames are small and infrequent
-  for (int i = 0; i < ws_client_count; i++)
-  {
-    // We don't have req context here, so we need to create a dummy req or use a different approach
-    // For now, skip ping functionality until we can implement it properly
-    ESP_LOGD(TAG, "Ping functionality disabled - requires httpd_req_t context");
-  }
-
-  ESP_LOGD(TAG, "Ping skipped for %d clients (no req context)", ws_client_count);
-  xSemaphoreGive(ws_clients_mutex);
 }
 
 // Broadcast latest sensor readings to all subscribed WebSocket clients
 void ws_broadcast_latest_sensor_data(void)
 {
-  // Check if server is initialized before broadcasting
-  if (server == NULL)
-  {
-    ESP_LOGD(TAG, "Server not initialized yet, skipping broadcast");
-    return;
-  }
-
-  // Send heartbeat ping before broadcasting data
-  ws_send_ping_to_clients();
-
-  // Get sensor handles
-  temp_sensor_handle_t air_sensor = temp_sensor_get_air_sensor();
-  temp_sensor_handle_t heater_sensor = temp_sensor_get_heater_sensor();
-
-  char json_data[256];
-  strcpy(json_data, "[");
-
-  int count = 0;
-
-  // Send latest air sensor reading
-  if (air_sensor)
-  {
-    temp_sample_t sample;
-    if (temp_sensor_get_latest_sample(air_sensor, &sample))
-    {
-      char item[128];
-      snprintf(item, sizeof(item), "{\"sensor\":\"air\",\"temperature\":%.2f,\"timestamp\":%lu}", sample.temperature, (unsigned long)sample.timestamp);
-      strcat(json_data, item);
-      count++;
-    }
-  }
-
-  // Send latest heater sensor reading
-  if (heater_sensor)
-  {
-    if (count > 0)
-      strcat(json_data, ",");
-    temp_sample_t sample;
-    if (temp_sensor_get_latest_sample(heater_sensor, &sample))
-    {
-      char item[128];
-      snprintf(item, sizeof(item), "{\"sensor\":\"heater\",\"temperature\":%.2f,\"timestamp\":%lu}", sample.temperature, (unsigned long)sample.timestamp);
-      strcat(json_data, item);
-      count++;
-    }
-  }
-
-  strcat(json_data, "]");
-
-  if (count > 0)
-  {
-    ESP_LOGI(TAG, "Broadcasting latest sensor data to all clients: %s", json_data);
-    ws_broadcast_sensor_data(json_data);
-  }
+  // With per-client callbacks, this function is now a no-op
+  // Each client receives data through their individual callback subscriptions
+  ESP_LOGD(TAG, "ws_broadcast_latest_sensor_data called - data sent via per-client callbacks");
 }
 
 // Sensor data handler - WebSocket handler for temperature data with subscription
@@ -420,15 +193,15 @@ esp_err_t sensor_data_handler(httpd_req_t *req)
   esp_err_t ws_ret = httpd_ws_recv_frame(req, &ws_pkt, 0);
   if (ws_ret != ESP_OK)
   {
-    // Connection likely closed - unsubscribe client
+    // Connection broken - clean up session context and return error to close connection
     int sockfd = httpd_req_to_sockfd(req);
-    ESP_LOGI(TAG, "WebSocket connection closed for fd=%d", sockfd);
-    ws_client_remove(sockfd);
+    ESP_LOGD(TAG, "WebSocket connection broken for fd=%d: %s", sockfd, esp_err_to_name(ws_ret));
 
     // Clean up session context
     cleanup_session_context(req, sess);
 
-    return ESP_OK;
+    // Return error to tell HTTP server to close the connection
+    return ws_ret;
   }
 
   // First successful frame reception confirms handshake is complete
@@ -437,8 +210,53 @@ esp_err_t sensor_data_handler(httpd_req_t *req)
     sess->handshake_complete = true;
     ESP_LOGI(TAG, "WebSocket handshake confirmed for fd=%d, subscribing to sensor updates", sess->sockfd);
 
-    // Subscribe client to sensor data updates now that handshake is complete
-    ws_client_add(sess->sockfd);
+    // Subscribe to air sensor with session context
+    temp_sensor_handle_t air_sensor = temp_sensor_get_air_sensor();
+    if (air_sensor != NULL)
+    {
+      sensor_callback_ctx_t *air_ctx = malloc(sizeof(sensor_callback_ctx_t));
+      if (air_ctx != NULL)
+      {
+        air_ctx->session = sess;
+        air_ctx->sensor_type = "air";
+        sess->air_context = air_ctx; // Store context for cleanup
+        sess->air_subscription = temp_sensor_subscribe(air_sensor, websocket_sensor_callback, air_ctx);
+        if (sess->air_subscription == NULL)
+        {
+          ESP_LOGE(TAG, "Failed to subscribe WebSocket client to air sensor");
+          free(air_ctx);
+          sess->air_context = NULL;
+        }
+      }
+      else
+      {
+        ESP_LOGE(TAG, "Failed to allocate air sensor callback context");
+      }
+    }
+
+    // Subscribe to heater sensor with session context
+    temp_sensor_handle_t heater_sensor = temp_sensor_get_heater_sensor();
+    if (heater_sensor != NULL)
+    {
+      sensor_callback_ctx_t *heater_ctx = malloc(sizeof(sensor_callback_ctx_t));
+      if (heater_ctx != NULL)
+      {
+        heater_ctx->session = sess;
+        heater_ctx->sensor_type = "heater";
+        sess->heater_context = heater_ctx; // Store context for cleanup
+        sess->heater_subscription = temp_sensor_subscribe(heater_sensor, websocket_sensor_callback, heater_ctx);
+        if (sess->heater_subscription == NULL)
+        {
+          ESP_LOGE(TAG, "Failed to subscribe WebSocket client to heater sensor");
+          free(heater_ctx);
+          sess->heater_context = NULL;
+        }
+      }
+      else
+      {
+        ESP_LOGE(TAG, "Failed to allocate heater sensor callback context");
+      }
+    }
   }
 
   ESP_LOGI(TAG, "WS frame type: %d, len: %d, final: %d", ws_pkt.type, ws_pkt.len, ws_pkt.final);
@@ -448,7 +266,6 @@ esp_err_t sensor_data_handler(httpd_req_t *req)
   {
     int sockfd = httpd_req_to_sockfd(req);
     ESP_LOGI(TAG, "WebSocket client sent close frame, fd=%d", sockfd);
-    ws_client_remove(sockfd);
 
     // Send close frame back to client
     httpd_ws_frame_t close_frame = {
@@ -483,9 +300,14 @@ esp_err_t sensor_data_handler(httpd_req_t *req)
     ret = httpd_ws_recv_frame(req, &ws_pkt, ws_pkt.len);
     if (ret != ESP_OK)
     {
-      ESP_LOGE(TAG, "httpd_ws_recv_frame failed to get data: %s", esp_err_to_name(ret));
+      ESP_LOGD(TAG, "WebSocket frame read failed: %s", esp_err_to_name(ret));
       free(ws_pkt.payload);
-      return ESP_OK; // Don't close connection
+
+      // Clean up session context on socket error
+      cleanup_session_context(req, sess);
+
+      // Return error to close connection
+      return ret;
     }
 
     // Null-terminate the payload for safe string operations
@@ -497,8 +319,7 @@ esp_err_t sensor_data_handler(httpd_req_t *req)
     // Check if client is requesting initial data
     if (ws_pkt.len == 8 && strcmp((char *)ws_pkt.payload, "get_data") == 0)
     {
-      ESP_LOGI(TAG, "Client requested initial data, sending buffered readings");
-      ws_send_initial_data(req, sess->sockfd);
+      ESP_LOGI(TAG, "Got message \"get_data\"");
     }
 
     // Free the payload buffer

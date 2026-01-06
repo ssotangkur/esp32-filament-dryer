@@ -14,7 +14,6 @@
 #include "sysmon_wrapper.h"
 #include "circular_buffer.h"
 #include "temp.h"
-#include "web_server.h"
 
 static const char *TAG = "TEMP";
 
@@ -28,25 +27,29 @@ typedef struct
   uint16_t averaging_samples;     // Number of ADC samples to average
 } thermistor_config_t;
 
-// Sensor information for the task
-typedef struct
-{
-  const thermistor_config_t *config; // Thermistor configuration
-  circular_buffer_t *buffer;         // Circular buffer for samples
-} sensor_info_t;
-
 // Parameters for temperature reading task
 typedef struct
 {
-  sensor_info_t *sensors; // Array of sensor configurations
-  size_t sensor_count;    // Number of sensors
+  temp_sensor_handle_t *sensors; // Array of sensor handles
+  size_t sensor_count;           // Number of sensors
 } temp_task_params_t;
+
+// Subscription structure for callback management
+struct temp_sensor_subscription
+{
+  temp_sensor_callback_t callback;       // The callback function
+  void *context;                         // Context passed to callback
+  struct temp_sensor_subscription *next; // Next subscription in list
+  struct temp_sensor_handle *sensor;     // Back reference to sensor
+};
 
 // Temperature sensor handle structure (opaque type implementation)
 struct temp_sensor_handle
 {
-  circular_buffer_t *buffer;         // Pointer to the sensor's buffer
-  const thermistor_config_t *config; // Pointer to the sensor's configuration (optional, for future use)
+  circular_buffer_t *buffer;                      // Pointer to the sensor's buffer
+  const thermistor_config_t *config;              // Pointer to the sensor's configuration (optional, for future use)
+  struct temp_sensor_subscription *subscriptions; // Linked list of subscriptions
+  SemaphoreHandle_t subscriptions_mutex;          // Mutex for thread-safe subscription management
 };
 
 // Global temperature buffers
@@ -232,18 +235,18 @@ static void temp_task(void *pvParameters)
     // Process each sensor in the array
     for (size_t i = 0; i < params->sensor_count; i++)
     {
-      sensor_info_t *sensor = &params->sensors[i];
+      temp_sensor_handle_t sensor_handle = params->sensors[i];
 
-      if (sensor->config != NULL && sensor->buffer != NULL)
+      if (sensor_handle != NULL && sensor_handle->config != NULL && sensor_handle->buffer != NULL)
       {
         // Read voltage from this sensor
-        float voltage = read_thermistor_voltage(sensor->config);
+        float voltage = read_thermistor_voltage(sensor_handle->config);
 
         // Calculate thermistor resistance from voltage
-        float resistance = calculate_thermistor_resistance(voltage, sensor->config);
+        float resistance = calculate_thermistor_resistance(voltage, sensor_handle->config);
 
         // Calculate temperature from resistance using Steinhart-Hart equation
-        float temperature = calculate_temperature_from_resistance(resistance, sensor->config);
+        float temperature = calculate_temperature_from_resistance(resistance, sensor_handle->config);
 
         // Check for invalid readings
         if (temperature < -50.0f || temperature > 150.0f)
@@ -264,7 +267,10 @@ static void temp_task(void *pvParameters)
             .timestamp = xTaskGetTickCount() * portTICK_PERIOD_MS};
 
         // Store in buffer
-        circular_buffer_push(sensor->buffer, &sample);
+        circular_buffer_push(sensor_handle->buffer, &sample);
+
+        // Notify subscribers of this sensor with the new data
+        temp_sensor_notify_subscribers(sensor_handle);
       }
 
       // Small delay between sensors to avoid ADC conflicts
@@ -273,9 +279,6 @@ static void temp_task(void *pvParameters)
         vTaskDelay(pdMS_TO_TICKS(10));
       }
     }
-
-    // Broadcast latest sensor readings to all WebSocket subscribers
-    ws_broadcast_latest_sensor_data();
 
     // Wait for next reading interval
     vTaskDelay(pdMS_TO_TICKS(TEMP_READ_INTERVAL_MS));
@@ -395,9 +398,24 @@ void temp_sensor_init(void)
   // Initialize sensor handles
   air_sensor_handle.buffer = &temp_buffer_1;
   air_sensor_handle.config = air_config_ptr;
+  air_sensor_handle.subscriptions = NULL;
+  air_sensor_handle.subscriptions_mutex = xSemaphoreCreateMutex();
+  if (air_sensor_handle.subscriptions_mutex == NULL)
+  {
+    ESP_LOGE(TAG, "Failed to create air sensor subscriptions mutex");
+    return;
+  }
 
   heater_sensor_handle.buffer = &temp_buffer_2;
   heater_sensor_handle.config = heater_config_ptr;
+  heater_sensor_handle.subscriptions = NULL;
+  heater_sensor_handle.subscriptions_mutex = xSemaphoreCreateMutex();
+  if (heater_sensor_handle.subscriptions_mutex == NULL)
+  {
+    ESP_LOGE(TAG, "Failed to create heater sensor subscriptions mutex");
+    vSemaphoreDelete(air_sensor_handle.subscriptions_mutex);
+    return;
+  }
 
   ESP_LOGI(TAG, "Heater sensor calibration: %.0f°C@%.0fΩ, %.0f°C@%.0fΩ, %.0f°C@%.0fΩ",
            heater_cal_point_1.temperature_celsius, heater_cal_point_1.resistance_ohms,
@@ -488,16 +506,16 @@ void temp_sensor_init(void)
     return;
   }
 
-  // Create sensor array for the task
-  static sensor_info_t sensor_array[] = {
-      {.config = &air_config, .buffer = &temp_buffer_1},   // Air sensor
-      {.config = &heater_config, .buffer = &temp_buffer_2} // Heater sensor
+  // Create sensor array for the task (use handles directly)
+  static temp_sensor_handle_t sensor_array[] = {
+      &air_sensor_handle,   // Air sensor handle
+      &heater_sensor_handle // Heater sensor handle
   };
 
   // Create task parameters
   static temp_task_params_t task_params = {
       .sensors = sensor_array,
-      .sensor_count = sizeof(sensor_array) / sizeof(sensor_info_t)};
+      .sensor_count = sizeof(sensor_array) / sizeof(temp_sensor_handle_t)};
 
   // Create multi-sensor temperature reading task
   BaseType_t result = sysmon_xTaskCreate(
@@ -656,6 +674,164 @@ float temp_sensor_get_resistance(temp_sensor_handle_t sensor)
 }
 
 /**
+ * @brief Subscribe to temperature sensor updates
+ * @param sensor Handle to the temperature sensor
+ * @param callback Function to call when new data is available
+ * @param context Context pointer passed to callback (can be NULL)
+ * @return Subscription token for unsubscribing, or NULL on failure
+ */
+temp_sensor_subscription_t temp_sensor_subscribe(temp_sensor_handle_t sensor, temp_sensor_callback_t callback, void *context)
+{
+  if (sensor == NULL || callback == NULL)
+  {
+    return NULL;
+  }
+
+  // Allocate subscription structure
+  struct temp_sensor_subscription *subscription = malloc(sizeof(struct temp_sensor_subscription));
+  if (subscription == NULL)
+  {
+    ESP_LOGE(TAG, "Failed to allocate memory for subscription");
+    return NULL;
+  }
+
+  subscription->callback = callback;
+  subscription->context = context;
+  subscription->sensor = sensor;
+  subscription->next = NULL;
+
+  // Take mutex to safely modify subscription list
+  if (xSemaphoreTake(sensor->subscriptions_mutex, pdMS_TO_TICKS(1000)) != pdTRUE)
+  {
+    ESP_LOGE(TAG, "Failed to take subscriptions mutex for subscribe");
+    free(subscription);
+    return NULL;
+  }
+
+  // Add to front of linked list
+  subscription->next = sensor->subscriptions;
+  sensor->subscriptions = subscription;
+
+  xSemaphoreGive(sensor->subscriptions_mutex);
+
+  // Immediately call callback with all current data (initial/full state)
+  // Send each sample individually by calling callback multiple times
+  size_t sample_count = circular_buffer_count(sensor->buffer);
+  if (sample_count > 0)
+  {
+    // Allocate a single sample buffer for reuse
+    temp_sample_t sample_buffer;
+    for (size_t i = 0; i < sample_count; i++)
+    {
+      if (circular_buffer_get_at_index(sensor->buffer, i, &sample_buffer))
+      {
+        // Call callback with each individual sample
+        callback(&sample_buffer, context);
+      }
+    }
+  }
+
+  ESP_LOGI(TAG, "Subscribed to sensor updates, %d initial samples sent", sample_count);
+  return subscription;
+}
+
+/**
+ * @brief Unsubscribe from temperature sensor updates
+ * @param sensor Handle to the temperature sensor
+ * @param subscription_token Token returned from temp_sensor_subscribe()
+ */
+void temp_sensor_unsubscribe(temp_sensor_handle_t sensor, temp_sensor_subscription_t subscription_token)
+{
+  if (sensor == NULL || subscription_token == NULL)
+  {
+    return;
+  }
+
+  // Take mutex to safely modify subscription list
+  if (xSemaphoreTake(sensor->subscriptions_mutex, pdMS_TO_TICKS(1000)) != pdTRUE)
+  {
+    ESP_LOGE(TAG, "Failed to take subscriptions mutex for unsubscribe");
+    return;
+  }
+
+  // Find and remove subscription from linked list
+  struct temp_sensor_subscription *current = sensor->subscriptions;
+  struct temp_sensor_subscription *previous = NULL;
+
+  while (current != NULL)
+  {
+    if (current == subscription_token)
+    {
+      // Remove from list
+      if (previous == NULL)
+      {
+        // Head of list
+        sensor->subscriptions = current->next;
+      }
+      else
+      {
+        // Middle/end of list
+        previous->next = current->next;
+      }
+
+      // Free subscription structure
+      free(current);
+
+      ESP_LOGI(TAG, "Unsubscribed from sensor updates");
+      break;
+    }
+
+    previous = current;
+    current = current->next;
+  }
+
+  xSemaphoreGive(sensor->subscriptions_mutex);
+}
+
+/**
+ * @brief Notify all subscribers of a sensor with new data
+ * @param sensor Handle to the temperature sensor
+ */
+void temp_sensor_notify_subscribers(temp_sensor_handle_t sensor)
+{
+  if (sensor == NULL || sensor->buffer == NULL)
+  {
+    return;
+  }
+
+  // Get the most recent sample (the one just added)
+  temp_sample_t latest_sample;
+  if (!circular_buffer_get_latest(sensor->buffer, &latest_sample))
+  {
+    return; // No data available
+  }
+
+  // Take mutex to safely access subscription list
+  if (xSemaphoreTake(sensor->subscriptions_mutex, pdMS_TO_TICKS(100)) != pdTRUE)
+  {
+    ESP_LOGE(TAG, "Failed to take subscriptions mutex for notify");
+    return;
+  }
+
+  // Call all callbacks with just the latest sample
+  struct temp_sensor_subscription *current = sensor->subscriptions;
+  size_t subscriber_count = 0;
+  while (current != NULL)
+  {
+    if (current->callback != NULL)
+    {
+      current->callback(&latest_sample, current->context);
+      subscriber_count++;
+    }
+    current = current->next;
+  }
+
+  xSemaphoreGive(sensor->subscriptions_mutex);
+
+  ESP_LOGD(TAG, "Notified %d subscribers with latest sample", subscriber_count);
+}
+
+/**
  * @brief Deinitialize temperature sensor (cleanup resources)
  */
 void temp_sensor_free(void)
@@ -664,6 +840,33 @@ void temp_sensor_free(void)
   {
     vTaskDelete(temp_task_handle);
     temp_task_handle = NULL;
+  }
+
+  // Clean up subscriptions and mutexes
+  if (air_sensor_handle.subscriptions_mutex != NULL)
+  {
+    // Free all air sensor subscriptions
+    struct temp_sensor_subscription *current = air_sensor_handle.subscriptions;
+    while (current != NULL)
+    {
+      struct temp_sensor_subscription *next = current->next;
+      free(current);
+      current = next;
+    }
+    vSemaphoreDelete(air_sensor_handle.subscriptions_mutex);
+  }
+
+  if (heater_sensor_handle.subscriptions_mutex != NULL)
+  {
+    // Free all heater sensor subscriptions
+    struct temp_sensor_subscription *current = heater_sensor_handle.subscriptions;
+    while (current != NULL)
+    {
+      struct temp_sensor_subscription *next = current->next;
+      free(current);
+      current = next;
+    }
+    vSemaphoreDelete(heater_sensor_handle.subscriptions_mutex);
   }
 
   circular_buffer_free(&temp_buffer_1);

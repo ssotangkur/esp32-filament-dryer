@@ -106,6 +106,11 @@ esp_err_t wifi_init(void)
   // Set WiFi mode to station
   ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
 
+  // Disable WiFi power save for better HTTP response latency
+  // Power save can add 100-300ms delay per packet, which causes HTTP timeouts
+  ESP_ERROR_CHECK(esp_wifi_set_ps(WIFI_PS_NONE));
+  ESP_LOGI(TAG, "WiFi power save disabled for improved HTTP responsiveness");
+
   ESP_LOGI(TAG, "WiFi initialization complete");
   return ESP_OK;
 }

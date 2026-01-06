@@ -72,6 +72,12 @@ extern "C"
     uint32_t timestamp;
   } temp_sample_t;
 
+  // Temperature sensor callback function type
+  typedef void (*temp_sensor_callback_t)(temp_sample_t *sample, void *context);
+
+  // Subscription token (opaque type for unsubscribe)
+  typedef struct temp_sensor_subscription *temp_sensor_subscription_t;
+
   /**
    * @brief Calculate Steinhart-Hart coefficients from three temperature-resistance data points
    * @param p1 First calibration point
@@ -146,6 +152,28 @@ extern "C"
    * @return Latest resistance in ohms, or -999.0f if no samples available or invalid sensor
    */
   float temp_sensor_get_resistance(temp_sensor_handle_t sensor);
+
+  /**
+   * @brief Subscribe to temperature sensor updates
+   * @param sensor Handle to the temperature sensor
+   * @param callback Function to call when new data is available (callback owns the temp_sample_t memory during the call)
+   * @param context Context pointer passed to callback (can be NULL)
+   * @return Subscription token for unsubscribing, or NULL on failure (this function allocates and returns the token)
+   */
+  temp_sensor_subscription_t temp_sensor_subscribe(temp_sensor_handle_t sensor, temp_sensor_callback_t callback, void *context);
+
+  /**
+   * @brief Unsubscribe from temperature sensor updates
+   * @param sensor Handle to the temperature sensor
+   * @param subscription_token Token returned from temp_sensor_subscribe()
+   */
+  void temp_sensor_unsubscribe(temp_sensor_handle_t sensor, temp_sensor_subscription_t subscription_token);
+
+  /**
+   * @brief Notify all subscribers of a sensor with current buffer contents
+   * @param sensor Handle to the temperature sensor
+   */
+  void temp_sensor_notify_subscribers(temp_sensor_handle_t sensor);
 
   /**
    * @brief Deinitialize temperature sensor (cleanup resources)
