@@ -3,7 +3,7 @@
 #include "unity.h"
 
 // Test function declarations
-void test_circular_buffer(void);
+void test_circular_buffer_real(void);
 void test_version(void);
 void test_temperature(void);
 
@@ -14,8 +14,8 @@ int main(int argc, char *argv[])
 
   UNITY_BEGIN();
 
-  // Run test groups
-  test_circular_buffer();
+  // Run all test groups
+  test_circular_buffer_real();
   test_version();
   test_temperature();
 

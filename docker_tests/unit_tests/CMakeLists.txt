@@ -18,17 +18,17 @@ include_directories(
 # Automatically find all generated mock .c files
 file(GLOB MOCK_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/mocks/*.c")
 
-# Create a simplified circular buffer for testing (no FreeRTOS)
+# Unit test sources for ESP32 circular buffer testing
 set(SOURCES
     main/test_main.c
-    main/test_circular_buffer_simple.c
+    main/test_circular_buffer.c       # Real circular buffer tests with ESP-IDF/FreeRTOS
     main/test_version.c
     main/test_temperature.c
     ${MOCK_SOURCES}                   # All CMock-generated mocks
     /opt/unity/src/unity.c            # Unity testing framework
     /opt/cmock/src/cmock.c            # CMock framework
     /project/main/version.c           # Version source from main project
-    # Note: circular_buffer_simple.c is included by main/test_circular_buffer_simple.c
+    # Note: circular_buffer.c is included by main/test_circular_buffer.c
 )
 
 # Include directories for Unity and CMock
