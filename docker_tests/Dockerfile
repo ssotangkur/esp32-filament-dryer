@@ -1,12 +1,17 @@
 FROM espressif/idf:v5.5.1
 
-# Install pip and testing dependencies in ESP-IDF environment
-RUN apt-get update && apt-get install -y python3-pip python3-venv && \
-  . /opt/esp/python_env/idf5.5_py3.12_env/bin/activate && \
-  pip install pytest pytest-embedded-serial pytest-embedded-idf pytest-embedded-qemu
+# Install additional tools needed for unit testing
+RUN apt-get update && apt-get install -y \
+  build-essential \
+  cmake \
+  ninja-build \
+  && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
 WORKDIR /project
 
-# Default command
-CMD ["/bin/bash"]
+# Copy the unit tests
+COPY unit_tests/ /project/unit_tests/
+
+# Set the default command to run unit tests
+CMD ["bash", "-c", "cd unit_tests && ./run_unit_tests.sh"]

@@ -10,18 +10,17 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/../../include
     ${CMAKE_CURRENT_SOURCE_DIR}/../../main
-    ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/main
 )
 
 # Create a simplified circular buffer for testing (no FreeRTOS)
 set(SOURCES
-    test_main.c
-    test_circular_buffer_simple.c
+    main/test_main.c
+    main/test_circular_buffer_simple.c
     main/test_version.c
     main/test_temperature.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../main/version.c
-    # Note: circular_buffer_simple.c is included by test_circular_buffer_simple.c
+    # Note: circular_buffer_simple.c is included by main/test_circular_buffer_simple.c
 )
 
 # Create executable

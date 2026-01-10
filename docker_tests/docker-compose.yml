@@ -1,12 +1,13 @@
 version: '3.8'
+
 services:
-  idf-test:
-    build: .
-    image: espressif/idf:v5.5.1-test
+  unit-tests:
+    build:
+      context: .
+      dockerfile: Dockerfile
     volumes:
       - ../:/project
-      - /tmp/.X11-unix:/tmp/.X11-unix:rw
     working_dir: /project
+    command: [ "bash", "-c", "cd docker_tests/unit_tests && ./run_unit_tests.sh" ]
     environment:
-      - DISPLAY=%DISPLAY%
-    command: [ "bash", "/project/docker_tests/test_script.sh" ]
+      - CMAKE_GENERATOR=Ninja

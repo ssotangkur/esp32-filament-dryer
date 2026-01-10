@@ -11,8 +11,8 @@ rm -rf build
 echo "Building unit tests with CMake..."
 mkdir -p build
 cd build
-cmake ..
-make
+cmake .. -G Ninja
+ninja
 
 echo "Running unit tests..."
 # Run the unit tests

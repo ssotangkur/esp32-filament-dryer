@@ -1,394 +1,211 @@
-# ESP32 Firmware Testing with QEMU in Docker
+# ESP32 Firmware Unit Testing with CMock
 
-This guide explains how to run automated tests for your ESP32 filament dryer firmware using QEMU emulation in a Docker container, providing a Linux environment for full ESP-IDF testing capabilities.
+This guide explains how to run automated unit tests for your ESP32 filament dryer firmware using the Unity testing framework with CMock for automatic mock generation.
 
-## Problem Statement
+## Overview
 
-- **Windows Limitation**: ESP-IDF's QEMU testing framework requires Linux for the `idf.py --preview set-target linux` command
-- **Cross-compilation Issues**: ESP-IDF's clang toolchain fails when targeting Linux from Windows
-- **Testing Needs**: Your firmware needs automated testing for reliability and CI/CD
+Your project includes a comprehensive unit testing framework that allows testing individual components in isolation without hardware dependencies.
 
-## Solution: Docker-based Testing
+## Testing Framework Structure
 
-Run ESP-IDF QEMU tests in a Docker container with a proper Linux environment, while developing on Windows.
-
-## Prerequisites
-
-1. **Docker Desktop** installed and running
-2. **Windows 10/11** with WSL2 (recommended) or Hyper-V
-3. **Git Bash** or **PowerShell** for running scripts
-4. **Python 3.8+** (for local development and VSCode import resolution)
-
-## VSCode Development Setup
-
-For the best development experience with VSCode/Pylance, install the pytest-embedded dependencies locally:
-
-### Install Development Dependencies
-
-```bash
-# Install the testing dependencies locally for VSCode/Pylance
-pip install --user pytest pytest-embedded-serial pytest-embedded-idf pytest-embedded-qemu
-
-# Or use the provided requirements file
-pip install --user -r requirements-dev.txt
+```
+docker_tests/unit_tests/
+├── CMakeLists.txt                    # Main test build configuration
+├── run_unit_tests.sh               # Test runner script
+├── test_framework.h               # Common test utilities
+├── circular_buffer_simple.c       # Simple buffer implementation for testing
+├── circular_buffer_simple.h       # Simple buffer header
+├── test_circular_buffer_simple.c  # Circular buffer unit tests
+├── test_main.c                    # Main test runner
+├── main/
+│   ├── CMakeLists.txt             # Test component configuration
+│   ├── test_circular_buffer.c     # Circular buffer tests
+│   ├── test_main.c               # Main function tests
+│   ├── test_temperature.c        # Temperature calculation tests
+│   └── test_version.c            # Version management tests
 ```
 
-### VSCode Configuration
+## Running Unit Tests
 
-To ensure VSCode/Pylance recognizes the imports, you may want to add this to `.vscode/settings.json`:
+### Prerequisites
+- Docker Desktop installed and running
+- Windows 10/11 with WSL2 (recommended) or Hyper-V
 
-```json
-{
-  "python.defaultInterpreterPath": "python",
-  "python.analysis.typeCheckingMode": "basic"
+### Quick Start
+```batch
+# Navigate to docker_tests directory
+cd docker_tests
+
+# Run all unit tests in Docker
+run_unit_tests.bat
+```
+
+### Manual Docker Commands
+```bash
+# Build the Docker image
+docker-compose build
+
+# Run unit tests
+docker-compose run --rm unit-tests
+```
+
+### Manual Testing
+```bash
+# Set up ESP-IDF environment
+idf.py --preview set-target esp32
+
+# Build and run tests
+idf.py build
+idf.py -p /dev/ttyUSB0 flash monitor  # Or use your preferred flashing method
+```
+
+## Test Categories
+
+### ✅ **Circular Buffer Tests**
+- **Location**: `test_circular_buffer.c`, `test_circular_buffer_simple.c`
+- **Coverage**: Buffer initialization, data insertion/removal, overflow handling
+- **Mock Dependencies**: None (pure algorithm testing)
+
+### ✅ **Version Management Tests**
+- **Location**: `test_version.c`
+- **Coverage**: Version string parsing, increment logic, format validation
+- **Mock Dependencies**: File I/O operations
+
+### ✅ **Temperature Calculation Tests**
+- **Location**: `test_temperature.c`
+- **Coverage**: Steinhart-Hart equation implementation, ADC value conversion
+- **Mock Dependencies**: ADC hardware interface
+
+### ✅ **Main Function Tests**
+- **Location**: `test_main.c`
+- **Coverage**: Application initialization, component startup sequence
+- **Mock Dependencies**: ESP-IDF system calls, hardware peripherals
+
+## Test Framework Features
+
+### Unity Testing Framework
+- Lightweight C testing framework
+- Automatic test discovery and execution
+- Detailed failure reporting with line numbers
+- Support for setup/teardown functions
+
+### CMock Mock Generation
+- Automatic mock generation from header files
+- Function call verification and expectations
+- Return value control for mocked functions
+- Parameter validation and capture
+
+### Test Organization
+- Each test file focuses on a single component
+- Clear naming convention: `test_<component>.c`
+- Comprehensive coverage of edge cases
+- Separation of concerns between units
+
+## Writing New Tests
+
+### Basic Test Structure
+```c
+#include "unity.h"
+#include "component_under_test.h"
+
+// Test setup (optional)
+void setUp(void) {
+    // Initialize test fixtures
+}
+
+// Test teardown (optional)
+void tearDown(void) {
+    // Clean up after each test
+}
+
+// Individual test functions
+void test_component_basic_functionality(void) {
+    // Arrange
+    // Act
+    // Assert
+    TEST_ASSERT_EQUAL(expected_value, actual_value);
+}
+
+// Main test runner
+int main(void) {
+    UNITY_BEGIN();
+    RUN_TEST(test_component_basic_functionality);
+    return UNITY_END();
 }
 ```
 
-This allows VSCode to provide:
-- ✅ **Autocomplete** for `QemuApp`, `QemuDut`, and other pytest-embedded classes
-- ✅ **Type checking** and error detection
-- ✅ **Full IntelliSense** support for test development
-
-## Quick Start
-
-### 1. Testing Environment Setup
-
-The testing environment is already configured in the `docker_tests/` directory:
-
-- `Dockerfile` - ESP-IDF testing environment
-- `docker-compose.yml` - Test orchestration
-- `run_tests.bat` - Windows test runner
-- `test_script.sh` - Linux test runner
-- `pytest_hello_world.py` - Integration test suite
-- `unit_tests/` - Unit testing framework with CMock
-- Project files accessed via Docker volume mount (no duplication!)
-
-### 2. Run Tests
-
-```bash
-cd docker_tests
-run_tests.bat
-```
-
-## What the Setup Does
-
-### Docker Environment
-- Uses official `espressif/idf:v5.5.1` Docker image
-- Includes ESP-IDF v5.5.1 with QEMU support
-- Pre-installs pytest testing framework
-- Mounts your project directory for live testing
-
-### Test Workflow
-1. **Set Target**: `idf.py --preview set-target linux`
-2. **Build**: `idf.py build` (cross-compiles for Linux)
-3. **Test**: `idf.py qemu` with pytest-embedded-qemu
-4. **Verify**: Automated checks of firmware behavior
-
-## Manual Testing
-
-For interactive testing:
-
-```bash
-cd docker_tests
-docker-compose run --rm idf-test bash
-```
-
-Inside the container:
-```bash
-# Set up for QEMU
-idf.py --preview set-target linux
-
-# Build firmware
-idf.py build
-
-# Run QEMU manually
-idf.py qemu
-
-# Or run specific tests
-python -m pytest pytest_hello_world.py::test_hello_world_linux -v
-```
-
-## Test Examples
-
-Your project includes `pytest_hello_world.py` with examples:
-
-```python
-@pytest.mark.host_test
-@pytest.mark.qemu
-@idf_parametrize('target', ['esp32', 'esp32c3'], indirect=['target'])
-def test_hello_world_host(app: QemuApp, dut: QemuDut) -> None:
-    # Tests run firmware in QEMU and check output
-    dut.expect('Hello world!')
-```
-
-## ADC Hardware Mocking for Testing
-
-The testing framework includes comprehensive ADC mocking capabilities to simulate various hardware failure scenarios, particularly analog pin disconnection.
-
-### Mock ADC Features
-
-Located in `docker_tests/mock_adc.h` and `mock_adc.c`:
-
-- **Disconnected Pins**: Simulate sensors becoming unplugged
-- **Short Circuits**: Test overvoltage protection
-- **Electrical Noise**: Validate signal filtering
-- **Intermittent Connections**: Test flaky sensor connections
-- **Floating Pins**: Simulate uninitialized hardware states
-
-### ADC Mocking Examples
-
-```python
-# Import mock ADC functions
-from mock_adc import (
-    mock_adc_init, mock_adc_simulate_disconnection,
-    mock_adc_simulate_short_circuit, mock_adc_simulate_noise,
-    mock_adc_reset_to_normal, mock_adc_set_normal_value
-)
-
-@pytest.mark.qemu
-@idf_parametrize('target', ['linux'], indirect=['target'])
-def test_analog_pin_disconnected(dut: QemuDut) -> None:
-    """Test ADC disconnection detection"""
-    # Initialize mock system
-    mock_adc_init()
-
-    # Set normal operating value (~25°C)
-    mock_adc_set_normal_value(0, 1850)
-
-    # Simulate disconnected air temperature sensor
-    mock_adc_simulate_disconnection(0)
-
-    # Firmware should detect invalid readings
-    dut.expect('Invalid temperature reading')
-    dut.expect('Test completed')
-
-@pytest.mark.qemu
-@idf_parametrize('target', ['linux'], indirect=['target'])
-def test_short_circuit_protection(dut: QemuDut) -> None:
-    """Test short circuit detection"""
-    mock_adc_init()
-    mock_adc_simulate_short_circuit(1)  # Heater sensor shorted
-
-    dut.expect('QEMU Temperature Test Starting')
-    # Should detect abnormally high readings
-    dut.expect('Test completed')
-
-@pytest.mark.qemu
-@idf_parametrize('target', ['linux'], indirect=['target'])
-def test_electrical_noise_resistance(dut: QemuDut) -> None:
-    """Test noise immunity"""
-    mock_adc_init()
-    mock_adc_simulate_noise(0, 0.3)  # 30% noise amplitude
-
-    dut.expect('QEMU Temperature Test Starting')
-    # Should still produce reasonable temperature readings
-    dut.expect('Test completed')
-```
-
-### Mock ADC API Reference
-
+### Using CMock Mocks
 ```c
-// Initialization
-void mock_adc_init(void);
+#include "unity.h"
+#include "cmock.h"
+#include "mock_hardware_driver.h"
 
-// Mode control
-void mock_adc_set_mode(adc_channel_t channel, mock_adc_mode_t mode);
-void mock_adc_reset_to_normal(adc_channel_t channel);
+// Create mock for hardware_driver.h
+void test_with_mocked_hardware(void) {
+    // Expect hardware call and define return value
+    hardware_read_ExpectAndReturn(0x1234);
 
-// Configuration
-void mock_adc_set_normal_value(adc_channel_t channel, uint16_t value);
-void mock_adc_set_disconnect_threshold(adc_channel_t channel, uint16_t threshold);
+    // Test code that calls hardware
+    uint16_t result = read_sensor_value();
 
-// Scenario simulation
-void mock_adc_simulate_disconnection(adc_channel_t channel);
-void mock_adc_simulate_short_circuit(adc_channel_t channel);
-void mock_adc_simulate_noise(adc_channel_t channel, float amplitude);
-void mock_adc_simulate_intermittent(adc_channel_t channel, uint32_t period_ms);
+    // Verify expectations
+    TEST_ASSERT_EQUAL(0x1234, result);
+}
 ```
 
-### Mock ADC Modes
+## Test Execution Output
 
-- **NORMAL**: Standard operation with optional noise
-- **DISCONNECTED**: Reads very low values (0-50)
-- **SHORT_CIRCUIT**: Reads maximum values (~4095)
-- **NOISE**: Random values across full range
-- **FLOATING**: Unpredictable readings
-- **INTERMITTENT**: Alternates between normal and disconnected
+When tests run successfully, you'll see output like:
+```
+test_circular_buffer.c:23:test_buffer_initialization:PASS
+test_circular_buffer.c:45:test_buffer_overflow:PASS
+test_temperature.c:12:test_valid_conversion:PASS
 
-## Creating Custom Tests
-
-Add tests to `pytest_hello_world.py` or create new test files:
-
-```python
-import pytest
-from pytest_embedded_qemu.dut import QemuDut
-
-@pytest.mark.qemu
-def test_temperature_sensor(dut: QemuDut):
-    """Test temperature sensor readings"""
-    dut.expect('Temperature: 25.0°C')
-    # Add assertions...
-
-@pytest.mark.qemu
-def test_display_output(dut: QemuDut):
-    """Test display functionality"""
-    dut.expect('Display initialized')
-    # Add display tests...
-
-@pytest.mark.qemu
-def test_web_server(dut: QemuDut):
-    """Test web server endpoints"""
-    # Web server testing in QEMU
-    # (may require additional setup)
+-----------------------
+7 Tests 0 Failures 0 Ignored
+OK
 ```
 
-## Testing Strategies
+## Benefits of Unit Testing
 
-Your ESP32 filament dryer project now supports **two complementary testing approaches**:
+✅ **Fast Execution**: Tests run in seconds, not minutes
+✅ **Isolated Testing**: Each component tested independently
+✅ **No Hardware Required**: Perfect for CI/CD pipelines
+✅ **Early Bug Detection**: Catch issues during development
+✅ **Regression Prevention**: Ensure changes don't break existing functionality
+✅ **Documentation**: Tests serve as usage examples
 
-### 🧪 **Integration Testing (QEMU)**
-**Location**: `docker_tests/` directory
-- **Full firmware testing** in QEMU emulator
-- **Hardware simulation** via mock ADC framework
-- **End-to-end validation** of system behavior
-- **CI/CD integration** ready
+## Integration with Development Workflow
 
-### 🧪 **Unit Testing (CMock)**
-**Location**: `docker_tests/unit_tests/` directory
-- **Isolated component testing** with Unity framework
-- **Automatic mock generation** with CMock
-- **Fast execution** without hardware dependencies
-- **Detailed function validation**
-
-## Project-Specific Testing
-
-### ✅ **QEMU Integration Tests**
-- **Analog Pin Disconnection**: ADC validation and error handling
-- **Temperature Calculations**: Steinhart-Hart equation logic
-- **Mock Hardware Testing**: ADC, GPIO, and sensor simulation
-- **System Integration**: Component interaction validation
-
-### ✅ **CMock Unit Tests**
-- **Circular Buffer**: Pure algorithm testing
-- **Version Management**: String/version handling
-- **Configuration Parsing**: JSON/data processing
-- **Startup Tests**: Basic functionality
-- **Individual Functions**: Isolated behavior validation
-
-### ⚠️ Limited Testing (Hardware Dependent)
-- **Real Display Hardware** - Physical LCD interfaces
-- **WiFi/Network Stack** - Complex network interactions
-- **Real ADC Readings** - Actual analog-to-digital conversion
-- **Web Server** - Full network protocol testing
-
-## Running All Tests
-
-```bash
-# Run both QEMU integration tests AND unit tests
-cd docker_tests
-run_tests.bat
-
-# Or run them separately:
-
-# Run QEMU integration tests only
-cd docker_tests
-docker-compose run --rm idf-test
-
-# Run unit tests only
-cd docker_tests
-docker-compose run --rm idf-test bash -c "cd docker_tests/unit_tests && ./run_unit_tests.sh"
-```
-
-## Testing Pyramid
-
-```
-   End-to-End Tests (QEMU)
-          ↗️
- Integration Tests (QEMU)
-          ↗️
-   Unit Tests (CMock)
-          ↗️
-   Component Validation
-```
-
-### 🔧 Recommended Approach
-1. **Unit Tests**: Test individual components in isolation
-2. **Integration Tests**: Test component interactions
-3. **Hardware Tests**: Separate physical device testing
-
-## CI/CD Integration
-
-Add to your GitHub Actions or other CI:
-
-```yaml
-- name: Run QEMU Tests
-  run: |
-    cd docker_tests
-    docker-compose build
-    docker-compose run --rm idf-test
-```
+1. **Write tests alongside code** - Test-driven development
+2. **Run tests before committing** - Prevent regressions
+3. **Include in CI/CD** - Automated quality gates
+4. **Debug failures quickly** - Isolated component testing
 
 ## Troubleshooting
 
-### Docker Issues
-- Ensure Docker Desktop is running
-- Check disk space (ESP-IDF images are ~5GB)
-- Restart Docker Desktop if needed
-
 ### Build Issues
-- Clear Docker cache: `docker system prune -a`
-- Rebuild: `docker-compose build --no-cache`
+- Ensure ESP-IDF environment is activated
+- Check CMake version compatibility
+- Verify all test dependencies are included
 
 ### Test Failures
-- Check QEMU output logs
-- Verify test expectations match firmware output
-- Debug interactively: `docker-compose run --rm idf-test bash`
+- Check test expectations vs. actual behavior
+- Verify mock setup is correct
+- Review component interface changes
 
-### Import/Dependency Issues
-- **pytest-embedded-serial missing**: Add `pytest-embedded-serial` to Dockerfile
-- **pytest-embedded-serial-esp missing**: Comment out problematic imports and tests
-- **idf_parametrize undefined**: Comment out tests using `idf_parametrize` decorator
-- **QEMU firmware not outputting expected text**: Use simpler tests that just verify QEMU starts
+### Missing Mocks
+- Generate mocks for new dependencies: `cmock --mock_prefix=Mock <header.h>`
+- Include mock headers in test files
+- Configure mock expectations properly
 
-### Current Working Setup
-✅ **QEMU Integration Tests** - Full firmware testing in Docker container
-✅ **Unit Tests (CMock)** - Isolated component testing with Unity framework
-✅ **Docker build process** - ESP-IDF builds successfully for Linux target
-✅ **Test framework** - pytest-embedded-qemu runs integration tests
-✅ **Import issues resolved** - Problematic imports commented out
-✅ **Cross-platform testing** - Windows development with Linux testing environment
+## Future Enhancements
 
-⚠️ **Advanced ADC mocking disabled** - Complex hardware simulation commented out
-🔄 **Next steps** - Re-enable advanced tests once dependencies are resolved
-
-## Benefits
-
-✅ **Cross-Platform**: Test on Windows using Linux environment
-✅ **Automated**: CI/CD ready testing pipeline
-✅ **Isolated**: No interference with host development environment
-✅ **Reproducible**: Consistent testing environment
-✅ **Fast**: QEMU emulation is faster than physical flashing
-
-## Alternative: Native Linux Testing
-
-If you have access to a Linux machine:
-
-```bash
-# Install ESP-IDF normally
-# Then run tests directly
-idf.py --preview set-target linux
-idf.py build
-idf.py qemu
-```
-
-## Next Steps
-
-1. Verify Docker environment is working: `docker info`
-2. Execute existing tests to ensure they pass: `cd docker_tests && run_tests.bat`
-3. Add custom tests for your firmware components
-4. Integrate with your CI/CD pipeline
-5. Consider hardware-in-the-loop testing for complete validation
+- **Code Coverage**: Integrate with gcov/lcov for coverage reports
+- **Test Fixtures**: Shared setup/teardown for common scenarios
+- **Parameterized Tests**: Test multiple inputs with single test function
+- **Performance Testing**: Benchmark critical functions
 
 ---
 
-**Status**: Ready for ESP32 firmware testing with QEMU in Docker! 🐳🚀
+**Status**: ESP32 firmware unit testing framework ready! 🧪⚡
