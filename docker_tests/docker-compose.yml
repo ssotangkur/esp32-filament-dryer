@@ -7,7 +7,8 @@ services:
       dockerfile: Dockerfile
     volumes:
       - ../:/project
+      - ./unit_tests:/project/unit_tests
     working_dir: /project
-    command: [ "bash", "-c", "cd docker_tests/unit_tests && ./run_unit_tests.sh" ]
+    command: [ "bash", "-c", "cd unit_tests && ./run_unit_tests.sh" ]
     environment:
       - CMAKE_GENERATOR=Ninja

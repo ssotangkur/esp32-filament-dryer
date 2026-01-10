@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "circular_buffer_simple.c"
-#include "test_framework.h"
+#include "unity.h"
 
 // Test data structure
 typedef struct
@@ -132,10 +132,10 @@ void test_circular_buffer_clear(void)
 void test_circular_buffer(void)
 {
   printf("Running circular buffer tests...\n");
-  test_circular_buffer_init();
-  test_circular_buffer_push_pop();
-  test_circular_buffer_overflow();
-  test_circular_buffer_empty();
-  test_circular_buffer_clear();
-  printf("Circular buffer tests completed: %d passed, %d failed\n", tests_run, failures);
+  RUN_TEST(test_circular_buffer_init);
+  RUN_TEST(test_circular_buffer_push_pop);
+  RUN_TEST(test_circular_buffer_overflow);
+  RUN_TEST(test_circular_buffer_empty);
+  RUN_TEST(test_circular_buffer_clear);
+  printf("Circular buffer tests completed\n");
 }
