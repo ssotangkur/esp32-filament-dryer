@@ -44,5 +44,16 @@ ota-server/node_modules/
 # Environment variables
 web/.env
 
+# Python cache and bytecode
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+
+# pytest cache
+.pytest_cache/
+
 # Make sure we include the sample config
 # example/main/wifi_credentials.h
