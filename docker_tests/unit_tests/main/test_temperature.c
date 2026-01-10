@@ -2,8 +2,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
-#include "unity.h"                    // Unity testing framework
-#include "Mockesp_adc_mock_headers.h" // CMock-generated ADC mocks
+#include "unity.h"            // Unity testing framework
+#include "Mockmock_esp_adc.h" // CMock-generated ADC mocks
 // #include "temp.h"  // Commented out - not available in test build
 
 // Simple test data structures for unit testing

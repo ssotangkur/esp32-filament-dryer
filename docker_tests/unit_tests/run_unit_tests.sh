@@ -9,9 +9,7 @@ rm -rf build
 
 # Generate CMock mocks
 echo "Generating CMock mocks..."
-cd main
-ruby /opt/cmock/lib/cmock.rb --mock_prefix=Mock --mock_path=. --unity_path=/opt/unity esp_adc_mock_headers.h
-cd ..
+./generate_mocks.sh
 
 # Build the unit tests using plain CMake
 echo "Building unit tests with CMake..."

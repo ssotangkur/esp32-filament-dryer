@@ -12,17 +12,18 @@ Your project includes a comprehensive unit testing framework that allows testing
 docker_tests/unit_tests/
 ├── CMakeLists.txt                    # Main test build configuration
 ├── run_unit_tests.sh               # Test runner script
-├── test_framework.h               # Common test utilities
-├── circular_buffer_simple.c       # Simple buffer implementation for testing
-├── circular_buffer_simple.h       # Simple buffer header
-├── test_circular_buffer_simple.c  # Circular buffer unit tests
-├── test_main.c                    # Main test runner
-├── main/
-│   ├── CMakeLists.txt             # Test component configuration
+├── generate_mocks.sh              # Shared mock generation script
+├── mock_headers/                  # Mock header definitions (mock_*.h files)
+│   └── mock_esp_adc.h            # ADC hardware interface mocks
+├── mocks/                         # Generated mock files (auto-generated)
+│   ├── Mockmock_esp_adc.c
+│   └── Mockmock_esp_adc.h
+├── main/                          # Test source files
 │   ├── test_circular_buffer.c     # Circular buffer tests
 │   ├── test_main.c               # Main function tests
 │   ├── test_temperature.c        # Temperature calculation tests
 │   └── test_version.c            # Version management tests
+└── circular_buffer_simple.c       # Simple buffer implementation for testing
 ```
 
 ## Running Unit Tests
@@ -59,27 +60,47 @@ idf.py build
 idf.py -p /dev/ttyUSB0 flash monitor  # Or use your preferred flashing method
 ```
 
-## Test Categories
+### Mock Management
 
-### ✅ **Circular Buffer Tests**
-- **Location**: `test_circular_buffer.c`, `test_circular_buffer_simple.c`
-- **Coverage**: Buffer initialization, data insertion/removal, overflow handling
-- **Mock Dependencies**: None (pure algorithm testing)
+#### Directory Structure
+```
+docker_tests/unit_tests/
+├── mock_headers/           # Mock header definitions (mock_*.h files)
+│   └── mock_esp_adc.h     # Example: ADC hardware interface mocks
+├── mocks/                  # Generated mock files (auto-generated)
+│   ├── Mockmock_esp_adc.c
+│   └── Mockmock_esp_adc.h
+├── generate_mocks.sh       # Shared mock generation script
+└── main/                   # Test files
+```
 
-### ✅ **Version Management Tests**
-- **Location**: `test_version.c`
-- **Coverage**: Version string parsing, increment logic, format validation
-- **Mock Dependencies**: File I/O operations
+#### Adding New Mocks
+1. Create a new header file in `mock_headers/` with `mock_` prefix:
+   ```bash
+   # Example: create mock_wifi.h
+   ```
 
-### ✅ **Temperature Calculation Tests**
-- **Location**: `test_temperature.c`
-- **Coverage**: Steinhart-Hart equation implementation, ADC value conversion
-- **Mock Dependencies**: ADC hardware interface
+2. Generate mocks (two options):
 
-### ✅ **Main Function Tests**
-- **Location**: `test_main.c`
-- **Coverage**: Application initialization, component startup sequence
-- **Mock Dependencies**: ESP-IDF system calls, hardware peripherals
+   **Option A - Standalone generation:**
+   ```batch
+   cd docker_tests
+   generate_mocks.bat
+   ```
+
+   **Option B - As part of full test run:**
+   ```batch
+   cd docker_tests
+   run_unit_tests.bat  # Automatically generates mocks first
+   ```
+
+3. The shared `generate_mocks.sh` script automatically discovers all `mock_*.h` files and generates corresponding mocks
+
+#### How It Works
+- **Shared Script**: `generate_mocks.sh` is used by both standalone generation and full test runs
+- **Convention-Based**: Files with `mock_` prefix in `mock_headers/` are automatically processed
+- **Docker-Powered**: Uses the same ESP-IDF Docker environment for consistency
+- **Automatic Inclusion**: CMake finds and includes all generated `.c` files from `mocks/`
 
 ## Test Framework Features
 
@@ -166,15 +187,6 @@ test_temperature.c:12:test_valid_conversion:PASS
 OK
 ```
 
-## Benefits of Unit Testing
-
-✅ **Fast Execution**: Tests run in seconds, not minutes
-✅ **Isolated Testing**: Each component tested independently
-✅ **No Hardware Required**: Perfect for CI/CD pipelines
-✅ **Early Bug Detection**: Catch issues during development
-✅ **Regression Prevention**: Ensure changes don't break existing functionality
-✅ **Documentation**: Tests serve as usage examples
-
 ## Integration with Development Workflow
 
 1. **Write tests alongside code** - Test-driven development
@@ -195,9 +207,10 @@ OK
 - Review component interface changes
 
 ### Missing Mocks
-- Generate mocks for new dependencies: `cmock --mock_prefix=Mock <header.h>`
-- Include mock headers in test files
-- Configure mock expectations properly
+- **Automatic generation**: Add `mock_*.h` files to `mock_headers/` and run `generate_mocks.bat`
+- **Manual generation**: Use the shared script: `docker run --rm -v "$(pwd):/project" -w /project espressif/idf:v5.5.1 bash docker_tests/unit_tests/generate_mocks.sh`
+- **Include generated headers**: Use `#include "Mockmock_header.h"` in test files
+- **Configure mock expectations**: Call `functionName_ExpectAndReturn()` in test setup
 
 ## Future Enhancements
 
@@ -208,4 +221,4 @@ OK
 
 ---
 
-**Status**: ESP32 firmware unit testing framework ready! 🧪⚡
+**Status**: ESP32 firmware unit testing framework with convention-based mock generation ready! 🧪⚡

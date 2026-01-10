@@ -10,8 +10,13 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 include_directories(
     /project/include      # Project include directory
     /project/main         # Project main directory
-    ${CMAKE_CURRENT_SOURCE_DIR}/main  # Test main directory
+    ${CMAKE_CURRENT_SOURCE_DIR}/main     # Test main directory
+    ${CMAKE_CURRENT_SOURCE_DIR}/mocks    # Generated mock headers
+    ${CMAKE_CURRENT_SOURCE_DIR}/mock_headers  # Mock header definitions
 )
+
+# Automatically find all generated mock .c files
+file(GLOB MOCK_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/mocks/*.c")
 
 # Create a simplified circular buffer for testing (no FreeRTOS)
 set(SOURCES
@@ -19,7 +24,7 @@ set(SOURCES
     main/test_circular_buffer_simple.c
     main/test_version.c
     main/test_temperature.c
-    main/Mockesp_adc_mock_headers.c  # CMock-generated mock
+    ${MOCK_SOURCES}                   # All CMock-generated mocks
     /opt/unity/src/unity.c            # Unity testing framework
     /opt/cmock/src/cmock.c            # CMock framework
     /project/main/version.c           # Version source from main project

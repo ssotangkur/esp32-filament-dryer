@@ -1,12 +1,16 @@
 # Build artifacts
 build/
 build-*/
+docker_tests/unit_tests/build/
 *.d
 *.o
 *.obj
 *.elf
 *.map
 *.bin
+
+# Generated test files
+docker_tests/unit_tests/mocks/
 
 # IDE/Editor files
 .vscode/
