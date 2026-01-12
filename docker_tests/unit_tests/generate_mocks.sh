@@ -11,7 +11,7 @@ for header_file in mock_headers/mock_*.h; do
   if [ -f "$header_file" ]; then
     filename=$(basename "$header_file" .h)
     echo "Generating mock for $filename.h..."
-    ruby /opt/cmock/lib/cmock.rb --mock_prefix=Mock --mock_path=mocks --unity_path=/opt/unity "$header_file"
+    ruby /opt/cmock/lib/cmock.rb --mock_prefix=Mock --mock_path=mocks --unity_path=/opt/unity -o cmock.yml "$header_file"
     echo "Generated mocks for $filename.h"
   fi
 done

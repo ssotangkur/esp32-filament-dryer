@@ -4,6 +4,7 @@
 
 // Test function declarations
 void test_circular_buffer_real(void);
+void test_temp(void);
 void test_version(void);
 void test_temperature(void);
 
@@ -16,6 +17,7 @@ int main(int argc, char *argv[])
 
   // Run all test groups
   test_circular_buffer_real();
+  test_temp();
   test_version();
   test_temperature();
 

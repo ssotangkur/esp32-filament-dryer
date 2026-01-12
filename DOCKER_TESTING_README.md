@@ -1,29 +1,28 @@
 # ESP32 Firmware Unit Testing with CMock
 
-This guide explains how to run automated unit tests for your ESP32 filament dryer firmware using the Unity testing framework with CMock for automatic mock generation.
+This guide explains how to run automated unit tests for your ESP32 filament dryer firmware using the Unity testing framework with CMock for automatic mock generation, including advanced ignore plugins for flexible mocking.
 
 ## Overview
 
-Your project includes a comprehensive unit testing framework that allows testing individual components in isolation without hardware dependencies.
+Your project includes a comprehensive unit testing framework that allows testing individual components in isolation without hardware dependencies. The framework features wrapper functions for clean test code and ignore plugins for flexible argument matching.
 
 ## Testing Framework Structure
 
 ```
 docker_tests/unit_tests/
-├── CMakeLists.txt                    # Main test build configuration
-├── run_unit_tests.sh               # Test runner script
-├── generate_mocks.sh              # Shared mock generation script
-├── mock_headers/                  # Mock header definitions (mock_*.h files)
-│   └── mock_esp_adc.h            # ADC hardware interface mocks
-├── mocks/                         # Generated mock files (auto-generated)
-│   ├── Mockmock_esp_adc.c
-│   └── Mockmock_esp_adc.h
-├── main/                          # Test source files
-│   ├── test_circular_buffer.c     # Circular buffer tests
-│   ├── test_main.c               # Main function tests
-│   ├── test_temperature.c        # Temperature calculation tests
-│   └── test_version.c            # Version management tests
-└── circular_buffer_simple.c       # Simple buffer implementation for testing
+├── CMakeLists.txt                    # Build configuration with global variables
+├── cmock.yml                         # CMock plugin configuration
+├── cmock_globals.c                   # Auto-generated global variables for ignore plugins
+├── run_unit_tests.sh                # Test runner script
+├── generate_mocks.sh               # Shared mock generation script
+├── mock_headers/                   # Mock header definitions
+│   ├── mock_*.h                    # CMock mock function definitions
+│   └── freertos/                   # FreeRTOS-specific headers
+├── mocks/                          # Generated mock files (auto-generated)
+│   └── Mockmock_*.c,h
+└── main/                           # Test source files
+    ├── test_*.c                    # Component tests with wrapper functions
+    └── *_mocks.c                   # Mock wrapper functions (optional)
 ```
 
 ## Running Unit Tests
@@ -34,12 +33,11 @@ docker_tests/unit_tests/
 
 ### Quick Start
 ```batch
-# Navigate to docker_tests directory
-cd docker_tests
-
-# Run all unit tests in Docker
+# Run all unit tests in Docker (works from any directory)
 run_unit_tests.bat
 ```
+
+**Note**: The `run_unit_tests.bat` script can be executed from any directory - it automatically finds the required files and Docker configuration.
 
 ### Manual Docker Commands
 ```bash
@@ -174,6 +172,51 @@ void test_with_mocked_hardware(void) {
 }
 ```
 
+### CMock Ignore Plugins
+
+The framework supports advanced ignore plugins for flexible argument matching:
+
+```c
+#include "unity.h"
+#include "Mockmock_component.h"
+
+// Ignore all arguments - useful for functions where arguments don't matter
+heap_caps_malloc_IgnoreAndReturn(mock_buffer);
+
+// Ignore specific arguments - useful for handle-based functions
+xSemaphoreTake_IgnoreArg_handle();
+
+// Accept any arguments - useful for error-tolerant functions
+adc_oneshot_read_ExpectAnyArgsAndReturn(ADC_ATTEN_DB_0, ESP_OK);
+
+// Clean macros (recommended for new code)
+adc_oneshot_read_ExpectAndReturn(handle, chan, out_raw, ESP_OK);
+
+// Internal macros with call counting (for complex scenarios)
+adc_oneshot_read_CMockExpectAndReturn(1, handle, chan, out_raw, ESP_OK);
+```
+
+### Wrapper Functions for Clean Tests
+
+For improved readability, use wrapper functions to encapsulate complex mock expectations:
+
+```c
+// In test file or separate mock wrapper file
+void mock_circular_buffer_init_success(size_t element_size, size_t buffer_size) {
+    // Set up all necessary mocks for successful initialization
+    heap_caps_malloc_CMockExpectAndReturn(1, buffer_size * element_size, MALLOC_CAP_SPIRAM, mock_buffer);
+    xSemaphoreCreateMutex_CMockExpectAndReturn(2, (SemaphoreHandle_t)0x2000);
+    // ... additional expectations
+}
+
+// In test functions - much cleaner!
+void test_circular_buffer_init(void) {
+    mock_circular_buffer_init_success(sizeof(element_t), CAPACITY);
+
+    TEST_ASSERT_TRUE(circular_buffer_init(&test_buf, sizeof(element_t), CAPACITY));
+}
+```
+
 ## Test Execution Output
 
 When tests run successfully, you'll see output like:
@@ -221,4 +264,4 @@ OK
 
 ---
 
-**Status**: ESP32 firmware unit testing framework with convention-based mock generation ready! 🧪⚡
+**Status**: ESP32 firmware unit testing framework with advanced mocking features operational! 🧪⚡

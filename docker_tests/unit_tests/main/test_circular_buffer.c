@@ -37,6 +37,161 @@ void cleanup_test_buffer(void)
   circular_buffer_free(&test_buffer);
 }
 
+// Mock wrapper functions for better test readability and maintainability
+
+/**
+ * @brief Setup mocks and call circular_buffer_init for successful initialization
+ * @param call_count_ptr Pointer to call count (will be updated)
+ * @param cb Pointer to circular buffer to initialize
+ * @param element_size Size of each element
+ * @param buffer_size Number of elements in buffer
+ * @param mock_buffer Pointer to mock memory buffer
+ * @return Result of circular_buffer_init call (should be true)
+ */
+bool mock_circular_buffer_init_success(int *call_count_ptr, circular_buffer_t *cb, size_t element_size, size_t buffer_size, void *mock_buffer)
+{
+  // Mock memory allocation
+  heap_caps_malloc_CMockExpectAndReturn((*call_count_ptr)++, element_size * buffer_size, MALLOC_CAP_SPIRAM, mock_buffer);
+
+  // Mock mutex creation
+  xSemaphoreCreateMutex_CMockExpectAndReturn((*call_count_ptr)++, (SemaphoreHandle_t)0x2000);
+
+  return circular_buffer_init(cb, element_size, buffer_size);
+}
+
+/**
+ * @brief Setup mocks and call circular_buffer_count operation
+ * @param call_count_ptr Pointer to call count (will be updated)
+ * @param cb Pointer to circular buffer
+ * @return Result of circular_buffer_count call
+ */
+size_t mock_circular_buffer_count(int *call_count_ptr, circular_buffer_t *cb)
+{
+  xSemaphoreTake_CMockExpectAndReturn((*call_count_ptr)++, (SemaphoreHandle_t)0x2000, portMAX_DELAY, pdTRUE);
+  xSemaphoreGive_CMockExpectAndReturn((*call_count_ptr)++, (SemaphoreHandle_t)0x2000, pdTRUE);
+  return circular_buffer_count(cb);
+}
+
+/**
+ * @brief Setup mocks and call circular_buffer_is_empty operation
+ * @param call_count_ptr Pointer to call count (will be updated)
+ * @param cb Pointer to circular buffer
+ * @return Result of circular_buffer_is_empty call
+ */
+bool mock_circular_buffer_is_empty(int *call_count_ptr, circular_buffer_t *cb)
+{
+  xSemaphoreTake_CMockExpectAndReturn((*call_count_ptr)++, (SemaphoreHandle_t)0x2000, portMAX_DELAY, pdTRUE);
+  xSemaphoreGive_CMockExpectAndReturn((*call_count_ptr)++, (SemaphoreHandle_t)0x2000, pdTRUE);
+  return circular_buffer_is_empty(cb);
+}
+
+/**
+ * @brief Setup mocks and call circular_buffer_is_full operation
+ * @param call_count_ptr Pointer to call count (will be updated)
+ * @param cb Pointer to circular buffer
+ * @return Result of circular_buffer_is_full call
+ */
+bool mock_circular_buffer_is_full(int *call_count_ptr, circular_buffer_t *cb)
+{
+  xSemaphoreTake_CMockExpectAndReturn((*call_count_ptr)++, (SemaphoreHandle_t)0x2000, portMAX_DELAY, pdTRUE);
+  xSemaphoreGive_CMockExpectAndReturn((*call_count_ptr)++, (SemaphoreHandle_t)0x2000, pdTRUE);
+  return circular_buffer_is_full(cb);
+}
+
+/**
+ * @brief Setup mocks and call circular_buffer_push operation
+ * @param call_count_ptr Pointer to call count (will be updated)
+ * @param cb Pointer to circular buffer
+ * @param data Pointer to data to push
+ * @return Result of circular_buffer_push call
+ */
+bool mock_circular_buffer_push(int *call_count_ptr, circular_buffer_t *cb, const void *data)
+{
+  xSemaphoreTake_CMockExpectAndReturn((*call_count_ptr)++, (SemaphoreHandle_t)0x2000, portMAX_DELAY, pdTRUE);
+  xSemaphoreGive_CMockExpectAndReturn((*call_count_ptr)++, (SemaphoreHandle_t)0x2000, pdTRUE);
+  return circular_buffer_push(cb, data);
+}
+
+/**
+ * @brief Setup mocks and call circular_buffer_get_latest operation
+ * @param call_count_ptr Pointer to call count (will be updated)
+ * @param cb Pointer to circular buffer
+ * @param data Pointer to buffer for retrieved data
+ * @return Result of circular_buffer_get_latest call
+ */
+bool mock_circular_buffer_get_latest(int *call_count_ptr, circular_buffer_t *cb, void *data)
+{
+  xSemaphoreTake_CMockExpectAndReturn((*call_count_ptr)++, (SemaphoreHandle_t)0x2000, portMAX_DELAY, pdTRUE);
+  xSemaphoreGive_CMockExpectAndReturn((*call_count_ptr)++, (SemaphoreHandle_t)0x2000, pdTRUE);
+  return circular_buffer_get_latest(cb, data);
+}
+
+/**
+ * @brief Setup mocks and call circular_buffer_get_at_index operation
+ * @param call_count_ptr Pointer to call count (will be updated)
+ * @param cb Pointer to circular buffer
+ * @param index Index to retrieve
+ * @param data Pointer to buffer for retrieved data
+ * @return Result of circular_buffer_get_at_index call
+ */
+bool mock_circular_buffer_get_at_index(int *call_count_ptr, circular_buffer_t *cb, size_t index, void *data)
+{
+  xSemaphoreTake_CMockExpectAndReturn((*call_count_ptr)++, (SemaphoreHandle_t)0x2000, portMAX_DELAY, pdTRUE);
+  xSemaphoreGive_CMockExpectAndReturn((*call_count_ptr)++, (SemaphoreHandle_t)0x2000, pdTRUE);
+  return circular_buffer_get_at_index(cb, index, data);
+}
+
+/**
+ * @brief Setup mocks for circular buffer cleanup/free
+ * @param call_count_start Starting call count for CMock expectations
+ * @param mock_buffer Pointer to mock memory buffer
+ * @return Next available call count
+ */
+int mock_circular_buffer_free(int call_count_start, void *mock_buffer)
+{
+  vSemaphoreDelete_CMockExpect(call_count_start++, (SemaphoreHandle_t)0x2000);
+  heap_caps_free_CMockExpect(call_count_start++, mock_buffer);
+  return call_count_start;
+}
+
+/**
+ * @brief Setup mocks and call circular_buffer_init with malloc failure
+ * @param call_count_ptr Pointer to call count (will be updated)
+ * @param cb Pointer to circular buffer to initialize
+ * @param element_size Size of each element
+ * @param buffer_size Number of elements in buffer
+ * @return Result of circular_buffer_init call (should be false)
+ */
+bool mock_circular_buffer_init_malloc_failure(int *call_count_ptr, circular_buffer_t *cb, size_t element_size, size_t buffer_size)
+{
+  // Mock failed memory allocation
+  heap_caps_malloc_CMockExpectAndReturn((*call_count_ptr)++, element_size * buffer_size, MALLOC_CAP_SPIRAM, NULL);
+  return circular_buffer_init(cb, element_size, buffer_size);
+}
+
+/**
+ * @brief Setup mocks and call circular_buffer_init with mutex creation failure
+ * @param call_count_ptr Pointer to call count (will be updated)
+ * @param cb Pointer to circular buffer to initialize
+ * @param element_size Size of each element
+ * @param buffer_size Number of elements in buffer
+ * @param mock_buffer Pointer to mock memory buffer
+ * @return Result of circular_buffer_init call (should be false)
+ */
+bool mock_circular_buffer_init_mutex_failure(int *call_count_ptr, circular_buffer_t *cb, size_t element_size, size_t buffer_size, void *mock_buffer)
+{
+  // Mock successful memory allocation
+  heap_caps_malloc_CMockExpectAndReturn((*call_count_ptr)++, element_size * buffer_size, MALLOC_CAP_SPIRAM, mock_buffer);
+
+  // Mock failed mutex creation
+  xSemaphoreCreateMutex_CMockExpectAndReturn((*call_count_ptr)++, NULL);
+
+  // Mock cleanup of allocated memory
+  heap_caps_free_CMockExpect((*call_count_ptr)++, mock_buffer);
+
+  return circular_buffer_init(cb, element_size, buffer_size);
+}
+
 // Test circular buffer initialization
 void test_circular_buffer_init(void)
 {
@@ -47,29 +202,19 @@ void test_circular_buffer_init(void)
   Mockmock_semphr_Init();
   Mockmock_esp_heap_caps_Init();
 
-  // Set up mock expectations - return pointer to real allocated memory
-  heap_caps_malloc_CMockExpectAndReturn(1, 5 * sizeof(test_item_t), MALLOC_CAP_SPIRAM, mock_buffer);
-  xSemaphoreCreateMutex_CMockExpectAndReturn(2, (SemaphoreHandle_t)0x2000);
+  // Setup mock expectations and call init using wrapper functions
+  int call_count = 1;
+  TEST_ASSERT_TRUE(mock_circular_buffer_init_success(&call_count, &test_buf, sizeof(test_item_t), 5, mock_buffer));
 
-  // Mock expectations for semaphore operations during count/is_empty/is_full checks
-  xSemaphoreTake_CMockExpectAndReturn(3, (SemaphoreHandle_t)0x2000, portMAX_DELAY, pdTRUE);
-  xSemaphoreGive_CMockExpectAndReturn(4, (SemaphoreHandle_t)0x2000, pdTRUE);
-  xSemaphoreTake_CMockExpectAndReturn(5, (SemaphoreHandle_t)0x2000, portMAX_DELAY, pdTRUE);
-  xSemaphoreGive_CMockExpectAndReturn(6, (SemaphoreHandle_t)0x2000, pdTRUE);
-  xSemaphoreTake_CMockExpectAndReturn(7, (SemaphoreHandle_t)0x2000, portMAX_DELAY, pdTRUE);
-  xSemaphoreGive_CMockExpectAndReturn(8, (SemaphoreHandle_t)0x2000, pdTRUE);
+  // Mock expectations and calls for count/is_empty/is_full checks (3 operations)
+  TEST_ASSERT_EQUAL(0, mock_circular_buffer_count(&call_count, &test_buf));
+  TEST_ASSERT_TRUE(mock_circular_buffer_is_empty(&call_count, &test_buf));
+  TEST_ASSERT_FALSE(mock_circular_buffer_is_full(&call_count, &test_buf));
 
-  // Mock expectation for semaphore deletion during cleanup
-  vSemaphoreDelete_CMockExpect(9, (SemaphoreHandle_t)0x2000);
-
-  // Mock expectation for heap free during cleanup
-  heap_caps_free_CMockExpect(10, mock_buffer);
-
-  TEST_ASSERT_TRUE(circular_buffer_init(&test_buf, sizeof(test_item_t), 5));
-  TEST_ASSERT_EQUAL(0, circular_buffer_count(&test_buf));
   TEST_ASSERT_EQUAL(5, test_buf.buffer_size);
-  TEST_ASSERT_TRUE(circular_buffer_is_empty(&test_buf));
-  TEST_ASSERT_FALSE(circular_buffer_is_full(&test_buf));
+
+  // Mock expectations for cleanup
+  call_count = mock_circular_buffer_free(call_count, mock_buffer);
 
   // Clean up
   circular_buffer_free(&test_buf);
@@ -80,13 +225,22 @@ void test_circular_buffer_init_failures(void)
 {
   circular_buffer_t invalid_buffer;
 
-  // NULL buffer
+  // Test malloc failure case
+  int call_count = 1;
+  TEST_ASSERT_FALSE(mock_circular_buffer_init_malloc_failure(&call_count, &invalid_buffer, sizeof(test_item_t), 5));
+
+  // Test mutex failure case
+  static uint8_t mock_buffer[5 * sizeof(test_item_t)];
+  call_count = 1;
+  TEST_ASSERT_FALSE(mock_circular_buffer_init_mutex_failure(&call_count, &invalid_buffer, sizeof(test_item_t), 5, mock_buffer));
+
+  // NULL buffer (no mock setup needed for parameter validation)
   TEST_ASSERT_FALSE(circular_buffer_init(NULL, sizeof(test_item_t), 5));
 
-  // Zero element size
+  // Zero element size (no mock setup needed for parameter validation)
   TEST_ASSERT_FALSE(circular_buffer_init(&invalid_buffer, 0, 5));
 
-  // Zero buffer size
+  // Zero buffer size (no mock setup needed for parameter validation)
   TEST_ASSERT_FALSE(circular_buffer_init(&invalid_buffer, sizeof(test_item_t), 0));
 }
 
@@ -99,63 +253,35 @@ void test_circular_buffer_push_pop(void)
   Mockmock_semphr_Init();
   Mockmock_esp_heap_caps_Init();
 
-  // Set up mock expectations for init
-  heap_caps_malloc_CMockExpectAndReturn(1, 10 * sizeof(test_item_t), MALLOC_CAP_SPIRAM, mock_buffer_10);
-  xSemaphoreCreateMutex_CMockExpectAndReturn(2, (SemaphoreHandle_t)0x2000);
-
-  // Mock expectations for semaphore operations during operations
-  xSemaphoreTake_CMockExpectAndReturn(3, (SemaphoreHandle_t)0x2000, portMAX_DELAY, pdTRUE);
-  xSemaphoreGive_CMockExpectAndReturn(4, (SemaphoreHandle_t)0x2000, pdTRUE);
-  xSemaphoreTake_CMockExpectAndReturn(5, (SemaphoreHandle_t)0x2000, portMAX_DELAY, pdTRUE);
-  xSemaphoreGive_CMockExpectAndReturn(6, (SemaphoreHandle_t)0x2000, pdTRUE);
-  xSemaphoreTake_CMockExpectAndReturn(7, (SemaphoreHandle_t)0x2000, portMAX_DELAY, pdTRUE);
-  xSemaphoreGive_CMockExpectAndReturn(8, (SemaphoreHandle_t)0x2000, pdTRUE);
-  xSemaphoreTake_CMockExpectAndReturn(9, (SemaphoreHandle_t)0x2000, portMAX_DELAY, pdTRUE);
-  xSemaphoreGive_CMockExpectAndReturn(10, (SemaphoreHandle_t)0x2000, pdTRUE);
-  xSemaphoreTake_CMockExpectAndReturn(11, (SemaphoreHandle_t)0x2000, portMAX_DELAY, pdTRUE);
-  xSemaphoreGive_CMockExpectAndReturn(12, (SemaphoreHandle_t)0x2000, pdTRUE);
-
-  // Mock expectation for semaphore deletion during cleanup
-  vSemaphoreDelete_CMockExpect(13, (SemaphoreHandle_t)0x2000);
-
-  // More mock expectations for semaphore operations during operations
-  xSemaphoreTake_CMockExpectAndReturn(15, (SemaphoreHandle_t)0x2000, portMAX_DELAY, pdTRUE);
-  xSemaphoreGive_CMockExpectAndReturn(16, (SemaphoreHandle_t)0x2000, pdTRUE);
-  xSemaphoreTake_CMockExpectAndReturn(17, (SemaphoreHandle_t)0x2000, portMAX_DELAY, pdTRUE);
-  xSemaphoreGive_CMockExpectAndReturn(18, (SemaphoreHandle_t)0x2000, pdTRUE);
-  xSemaphoreTake_CMockExpectAndReturn(19, (SemaphoreHandle_t)0x2000, portMAX_DELAY, pdTRUE);
-  xSemaphoreGive_CMockExpectAndReturn(20, (SemaphoreHandle_t)0x2000, pdTRUE);
-  xSemaphoreTake_CMockExpectAndReturn(21, (SemaphoreHandle_t)0x2000, portMAX_DELAY, pdTRUE);
-  xSemaphoreGive_CMockExpectAndReturn(22, (SemaphoreHandle_t)0x2000, pdTRUE);
-
-  // Mock expectation for heap free during cleanup
-  heap_caps_free_CMockExpect(23, mock_buffer_10);
-
-  // Initialize buffer
-  TEST_ASSERT_TRUE(circular_buffer_init(&test_buf, sizeof(test_item_t), 10));
+  // Initialize buffer using wrapper function
+  int call_count = 1;
+  TEST_ASSERT_TRUE(mock_circular_buffer_init_success(&call_count, &test_buf, sizeof(test_item_t), 10, mock_buffer_10));
 
   test_item_t item1 = {42, "test_item_1"};
   test_item_t item2 = {84, "test_item_2"};
   test_item_t result;
 
-  // Push items
-  TEST_ASSERT_TRUE(circular_buffer_push(&test_buf, &item1));
-  TEST_ASSERT_EQUAL(1, circular_buffer_count(&test_buf));
-  TEST_ASSERT_FALSE(circular_buffer_is_empty(&test_buf));
+  // Push items using wrapper functions
+  TEST_ASSERT_TRUE(mock_circular_buffer_push(&call_count, &test_buf, &item1));
+  TEST_ASSERT_EQUAL(1, mock_circular_buffer_count(&call_count, &test_buf));
+  TEST_ASSERT_FALSE(mock_circular_buffer_is_empty(&call_count, &test_buf));
 
-  TEST_ASSERT_TRUE(circular_buffer_push(&test_buf, &item2));
-  TEST_ASSERT_EQUAL(2, circular_buffer_count(&test_buf));
+  TEST_ASSERT_TRUE(mock_circular_buffer_push(&call_count, &test_buf, &item2));
+  TEST_ASSERT_EQUAL(2, mock_circular_buffer_count(&call_count, &test_buf));
 
-  // Get latest (should be item2)
-  TEST_ASSERT_TRUE(circular_buffer_get_latest(&test_buf, &result));
+  // Get latest (should be item2) using wrapper function
+  TEST_ASSERT_TRUE(mock_circular_buffer_get_latest(&call_count, &test_buf, &result));
   TEST_ASSERT_EQUAL(84, result.value);
   TEST_ASSERT_EQUAL(0, strcmp("test_item_2", result.name));
-  TEST_ASSERT_EQUAL(2, circular_buffer_count(&test_buf)); // get_latest doesn't remove
+  TEST_ASSERT_EQUAL(2, mock_circular_buffer_count(&call_count, &test_buf)); // get_latest doesn't remove
 
-  // Get at index 0 (should be item1)
-  TEST_ASSERT_TRUE(circular_buffer_get_at_index(&test_buf, 0, &result));
+  // Get at index 0 (should be item1) using wrapper function
+  TEST_ASSERT_TRUE(mock_circular_buffer_get_at_index(&call_count, &test_buf, 0, &result));
   TEST_ASSERT_EQUAL(42, result.value);
   TEST_ASSERT_EQUAL(0, strcmp("test_item_1", result.name));
+
+  // Clean up using wrapper function
+  call_count = mock_circular_buffer_free(call_count, mock_buffer_10);
 
   // Clean up
   circular_buffer_free(&test_buf);
@@ -221,31 +347,19 @@ void test_circular_buffer_empty(void)
   Mockmock_semphr_Init();
   Mockmock_esp_heap_caps_Init();
 
-  // Set up mock expectations for init
-  heap_caps_malloc_CMockExpectAndReturn(1, 10 * sizeof(test_item_t), MALLOC_CAP_SPIRAM, mock_buffer_10);
-  xSemaphoreCreateMutex_CMockExpectAndReturn(2, (SemaphoreHandle_t)0x2000);
-
-  // Mock expectations for semaphore operations during operations
-  xSemaphoreTake_CMockExpectAndReturn(3, (SemaphoreHandle_t)0x2000, portMAX_DELAY, pdTRUE);
-  xSemaphoreGive_CMockExpectAndReturn(4, (SemaphoreHandle_t)0x2000, pdTRUE);
-  xSemaphoreTake_CMockExpectAndReturn(5, (SemaphoreHandle_t)0x2000, portMAX_DELAY, pdTRUE);
-  xSemaphoreGive_CMockExpectAndReturn(6, (SemaphoreHandle_t)0x2000, pdTRUE);
-  xSemaphoreTake_CMockExpectAndReturn(7, (SemaphoreHandle_t)0x2000, portMAX_DELAY, pdTRUE);
-  xSemaphoreGive_CMockExpectAndReturn(8, (SemaphoreHandle_t)0x2000, pdTRUE);
-
-  // Mock expectation for semaphore deletion during cleanup
-  vSemaphoreDelete_CMockExpect(9, (SemaphoreHandle_t)0x2000);
-
-  // Mock expectation for heap free during cleanup
-  heap_caps_free_CMockExpect(10, mock_buffer_10);
-
-  // Initialize buffer
-  TEST_ASSERT_TRUE(circular_buffer_init(&test_buf, sizeof(test_item_t), 10));
+  // Initialize buffer using wrapper function
+  int call_count = 1;
+  TEST_ASSERT_TRUE(mock_circular_buffer_init_success(&call_count, &test_buf, sizeof(test_item_t), 10, mock_buffer_10));
 
   test_item_t result;
-  TEST_ASSERT_FALSE(circular_buffer_get_latest(&test_buf, &result));
-  TEST_ASSERT_EQUAL(0, circular_buffer_count(&test_buf));
-  TEST_ASSERT_TRUE(circular_buffer_is_empty(&test_buf));
+
+  // Test operations using wrapper functions
+  TEST_ASSERT_FALSE(mock_circular_buffer_get_latest(&call_count, &test_buf, &result));
+  TEST_ASSERT_EQUAL(0, mock_circular_buffer_count(&call_count, &test_buf));
+  TEST_ASSERT_TRUE(mock_circular_buffer_is_empty(&call_count, &test_buf));
+
+  // Clean up using wrapper function
+  call_count = mock_circular_buffer_free(call_count, mock_buffer_10);
 
   // Clean up
   circular_buffer_free(&test_buf);
@@ -260,47 +374,27 @@ void test_circular_buffer_clear(void)
   Mockmock_semphr_Init();
   Mockmock_esp_heap_caps_Init();
 
-  // Set up mock expectations for init
-  heap_caps_malloc_CMockExpectAndReturn(1, 10 * sizeof(test_item_t), MALLOC_CAP_SPIRAM, mock_buffer_10);
-  xSemaphoreCreateMutex_CMockExpectAndReturn(2, (SemaphoreHandle_t)0x2000);
-
-  // Mock expectations for semaphore operations during operations
-  xSemaphoreTake_CMockExpectAndReturn(3, (SemaphoreHandle_t)0x2000, portMAX_DELAY, pdTRUE);
-  xSemaphoreGive_CMockExpectAndReturn(4, (SemaphoreHandle_t)0x2000, pdTRUE);
-  xSemaphoreTake_CMockExpectAndReturn(5, (SemaphoreHandle_t)0x2000, portMAX_DELAY, pdTRUE);
-  xSemaphoreGive_CMockExpectAndReturn(6, (SemaphoreHandle_t)0x2000, pdTRUE);
-  xSemaphoreTake_CMockExpectAndReturn(7, (SemaphoreHandle_t)0x2000, portMAX_DELAY, pdTRUE);
-  xSemaphoreGive_CMockExpectAndReturn(8, (SemaphoreHandle_t)0x2000, pdTRUE);
-  xSemaphoreTake_CMockExpectAndReturn(9, (SemaphoreHandle_t)0x2000, portMAX_DELAY, pdTRUE);
-  xSemaphoreGive_CMockExpectAndReturn(10, (SemaphoreHandle_t)0x2000, pdTRUE);
-  xSemaphoreTake_CMockExpectAndReturn(11, (SemaphoreHandle_t)0x2000, portMAX_DELAY, pdTRUE);
-  xSemaphoreGive_CMockExpectAndReturn(12, (SemaphoreHandle_t)0x2000, pdTRUE);
-
-  // Mock expectation for semaphore deletion during cleanup
-  vSemaphoreDelete_CMockExpect(13, (SemaphoreHandle_t)0x2000);
-
-  // More semaphore expectations
-  xSemaphoreTake_CMockExpectAndReturn(14, (SemaphoreHandle_t)0x2000, portMAX_DELAY, pdTRUE);
-  xSemaphoreGive_CMockExpectAndReturn(15, (SemaphoreHandle_t)0x2000, pdTRUE);
-  xSemaphoreTake_CMockExpectAndReturn(16, (SemaphoreHandle_t)0x2000, portMAX_DELAY, pdTRUE);
-  xSemaphoreGive_CMockExpectAndReturn(17, (SemaphoreHandle_t)0x2000, pdTRUE);
-
-  // Mock expectation for heap free during cleanup
-  heap_caps_free_CMockExpect(18, mock_buffer_10);
-
-  // Initialize buffer
-  TEST_ASSERT_TRUE(circular_buffer_init(&test_buf, sizeof(test_item_t), 10));
+  // Initialize buffer using wrapper function
+  int call_count = 1;
+  TEST_ASSERT_TRUE(mock_circular_buffer_init_success(&call_count, &test_buf, sizeof(test_item_t), 10, mock_buffer_10));
 
   test_item_t item = {456, "clear_test"};
 
-  // Add item and clear
-  TEST_ASSERT_TRUE(circular_buffer_push(&test_buf, &item));
-  TEST_ASSERT_EQUAL(1, circular_buffer_count(&test_buf));
-  TEST_ASSERT_FALSE(circular_buffer_is_empty(&test_buf));
+  // Add item using wrapper function
+  TEST_ASSERT_TRUE(mock_circular_buffer_push(&call_count, &test_buf, &item));
+  TEST_ASSERT_EQUAL(1, mock_circular_buffer_count(&call_count, &test_buf));
+  TEST_ASSERT_FALSE(mock_circular_buffer_is_empty(&call_count, &test_buf));
 
+  // Clear operation (this needs manual mock setup since we don't have a wrapper for clear)
+  xSemaphoreTake_CMockExpectAndReturn(call_count++, (SemaphoreHandle_t)0x2000, portMAX_DELAY, pdTRUE);
+  xSemaphoreGive_CMockExpectAndReturn(call_count++, (SemaphoreHandle_t)0x2000, pdTRUE);
   circular_buffer_clear(&test_buf);
-  TEST_ASSERT_EQUAL(0, circular_buffer_count(&test_buf));
-  TEST_ASSERT_TRUE(circular_buffer_is_empty(&test_buf));
+
+  TEST_ASSERT_EQUAL(0, mock_circular_buffer_count(&call_count, &test_buf));
+  TEST_ASSERT_TRUE(mock_circular_buffer_is_empty(&call_count, &test_buf));
+
+  // Clean up using wrapper function
+  call_count = mock_circular_buffer_free(call_count, mock_buffer_10);
 
   // Clean up
   circular_buffer_free(&test_buf);
@@ -315,51 +409,42 @@ void test_circular_buffer_get_at_index(void)
   Mockmock_semphr_Init();
   Mockmock_esp_heap_caps_Init();
 
-  // Set up mock expectations for init
-  heap_caps_malloc_CMockExpectAndReturn(1, 10 * sizeof(test_item_t), MALLOC_CAP_SPIRAM, mock_buffer_10);
-  xSemaphoreCreateMutex_CMockExpectAndReturn(2, (SemaphoreHandle_t)0x2000);
-
-  // Mock expectations for semaphore operations during operations
-  // 5 push operations + 7 get operations = 24 semaphore operations
-  for (int i = 3; i <= 50; i += 2)
-  {
-    xSemaphoreTake_CMockExpectAndReturn(i, (SemaphoreHandle_t)0x2000, portMAX_DELAY, pdTRUE);
-    xSemaphoreGive_CMockExpectAndReturn(i + 1, (SemaphoreHandle_t)0x2000, pdTRUE);
-  }
-
-  // Mock expectation for semaphore deletion during cleanup
-  vSemaphoreDelete_CMockExpect(51, (SemaphoreHandle_t)0x2000);
-
-  // Mock expectation for heap free during cleanup
-  heap_caps_free_CMockExpect(52, mock_buffer_10);
-
-  // Initialize buffer
-  TEST_ASSERT_TRUE(circular_buffer_init(&test_buf, sizeof(test_item_t), 10));
+  // Initialize buffer using wrapper function
+  int call_count = 1;
+  TEST_ASSERT_TRUE(mock_circular_buffer_init_success(&call_count, &test_buf, sizeof(test_item_t), 10, mock_buffer_10));
 
   test_item_t item;
   test_item_t result;
 
-  // Add 5 items
+  // Add 5 items using wrapper functions
   for (int i = 0; i < 5; i++)
   {
     item.value = i * 10;
     sprintf(item.name, "item_%d", i);
-    TEST_ASSERT_TRUE(circular_buffer_push(&test_buf, &item));
+    TEST_ASSERT_TRUE(mock_circular_buffer_push(&call_count, &test_buf, &item));
   }
 
-  // Test valid indices
+  // Test valid indices using wrapper functions
   char expected_name[32];
   for (int i = 0; i < 5; i++)
   {
-    TEST_ASSERT_TRUE(circular_buffer_get_at_index(&test_buf, i, &result));
+    TEST_ASSERT_TRUE(mock_circular_buffer_get_at_index(&call_count, &test_buf, i, &result));
     TEST_ASSERT_EQUAL(i * 10, result.value);
     sprintf(expected_name, "item_%d", i);
     TEST_ASSERT_EQUAL(0, strcmp(result.name, expected_name));
   }
 
-  // Test invalid indices
-  TEST_ASSERT_FALSE(circular_buffer_get_at_index(&test_buf, 5, &result));  // Out of bounds
+  // Test invalid indices (these need manual mock setup since they still call semaphore operations)
+  xSemaphoreTake_CMockExpectAndReturn(call_count++, (SemaphoreHandle_t)0x2000, portMAX_DELAY, pdTRUE);
+  xSemaphoreGive_CMockExpectAndReturn(call_count++, (SemaphoreHandle_t)0x2000, pdTRUE);
+  TEST_ASSERT_FALSE(circular_buffer_get_at_index(&test_buf, 5, &result)); // Out of bounds
+
+  xSemaphoreTake_CMockExpectAndReturn(call_count++, (SemaphoreHandle_t)0x2000, portMAX_DELAY, pdTRUE);
+  xSemaphoreGive_CMockExpectAndReturn(call_count++, (SemaphoreHandle_t)0x2000, pdTRUE);
   TEST_ASSERT_FALSE(circular_buffer_get_at_index(&test_buf, 10, &result)); // Way out of bounds
+
+  // Clean up using wrapper function
+  call_count = mock_circular_buffer_free(call_count, mock_buffer_10);
 
   // Clean up
   circular_buffer_free(&test_buf);
@@ -389,30 +474,17 @@ void test_circular_buffer_null_parameters(void)
   Mockmock_semphr_Init();
   Mockmock_esp_heap_caps_Init();
 
-  // Set up mock expectations for init
-  heap_caps_malloc_CMockExpectAndReturn(1, 10 * sizeof(test_item_t), MALLOC_CAP_SPIRAM, mock_buffer_10);
-  xSemaphoreCreateMutex_CMockExpectAndReturn(2, (SemaphoreHandle_t)0x2000);
+  // Initialize buffer using wrapper function
+  int call_count = 1;
+  TEST_ASSERT_TRUE(mock_circular_buffer_init_success(&call_count, &test_buf, sizeof(test_item_t), 10, mock_buffer_10));
 
-  // Initialize buffer
-  TEST_ASSERT_TRUE(circular_buffer_init(&test_buf, sizeof(test_item_t), 10));
-
-  // Mock expectations for semaphore operations during operations
-  xSemaphoreTake_CMockExpectAndReturn(3, (SemaphoreHandle_t)0x2000, portMAX_DELAY, pdTRUE);
-  xSemaphoreGive_CMockExpectAndReturn(4, (SemaphoreHandle_t)0x2000, pdTRUE);
-  xSemaphoreTake_CMockExpectAndReturn(5, (SemaphoreHandle_t)0x2000, portMAX_DELAY, pdTRUE);
-  xSemaphoreGive_CMockExpectAndReturn(6, (SemaphoreHandle_t)0x2000, pdTRUE);
-  xSemaphoreTake_CMockExpectAndReturn(7, (SemaphoreHandle_t)0x2000, portMAX_DELAY, pdTRUE);
-  xSemaphoreGive_CMockExpectAndReturn(8, (SemaphoreHandle_t)0x2000, pdTRUE);
-
+  // Test NULL data pointers (these fail parameter validation so don't need mocks)
   TEST_ASSERT_FALSE(circular_buffer_push(&test_buf, NULL));
   TEST_ASSERT_FALSE(circular_buffer_get_latest(&test_buf, NULL));
   TEST_ASSERT_FALSE(circular_buffer_get_at_index(&test_buf, 0, NULL));
 
-  // Mock expectation for semaphore deletion during cleanup
-  vSemaphoreDelete_CMockExpect(9, (SemaphoreHandle_t)0x2000);
-
-  // Mock expectation for heap free during cleanup
-  heap_caps_free_CMockExpect(10, mock_buffer_10);
+  // Clean up using wrapper function
+  call_count = mock_circular_buffer_free(call_count, mock_buffer_10);
 
   // Clean up
   circular_buffer_free(&test_buf);

@@ -1,0 +1,22 @@
+:cmock:
+  :mock_prefix: Mock
+  :when_no_prototypes: :warn
+  :enforce_strict_ordering: TRUE
+  :plugins:
+    - :ignore
+    - :ignore_arg
+    - :expect_any_args
+  :treat_as:
+    uint8: HEX
+    uint16: HEX
+    uint32: HEX
+    int8: HEX
+    int16: HEX
+    int32: HEX
+
+# Use smart argument handling (ignore unspecified args for all functions)
+:args: :smart
+
+# Generate ignore variants for ALL mocked functions (not just specific ones)
+# When plugins include :ignore, :ignore_arg, and :expect_any_args,
+# CMock generates these variants for every mocked function automatically

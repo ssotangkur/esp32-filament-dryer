@@ -11,6 +11,11 @@ typedef void *QueueHandle_t;
 typedef void *TaskHandle_t;
 typedef void *TimerHandle_t;
 
+// FreeRTOS integer types
+typedef int BaseType_t;
+typedef unsigned int UBaseType_t;
+typedef unsigned int TickType_t;
+
 // FreeRTOS constants
 #define pdTRUE 1
 #define pdFALSE 0
@@ -23,6 +28,12 @@ typedef void *TimerHandle_t;
 // Timeout values
 #define portMAX_DELAY 0xFFFFFFFF
 #define portTICK_PERIOD_MS 1
+
+// Time conversion macros
+#define pdMS_TO_TICKS(xTimeInMs) ((TickType_t)((xTimeInMs) * 1000 / portTICK_PERIOD_MS))
+
+// Task function type
+typedef void (*TaskFunction_t)(void *);
 
 // Task priorities
 #define tskIDLE_PRIORITY 0
