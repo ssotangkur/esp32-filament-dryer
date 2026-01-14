@@ -115,7 +115,7 @@ void test_temperature_reading_averaging(void)
 void test_temperature_config_validation(void)
 {
   // Test valid configuration
-  TEST_ASSERT_GREATER_THAN(0, test_config.adc_channel);
+  TEST_ASSERT_TRUE(test_config.adc_channel >= 0);
   TEST_ASSERT_GREATER_THAN(0.0f, test_config.series_resistor);
   TEST_ASSERT_GREATER_THAN(0.0f, test_config.adc_voltage_reference);
   TEST_ASSERT_GREATER_THAN(0, test_config.averaging_samples);

@@ -296,43 +296,33 @@ void test_circular_buffer_overflow(void)
   Mockmock_semphr_Init();
   Mockmock_esp_heap_caps_Init();
 
-  // Set up mock expectations for init
-  heap_caps_malloc_CMockExpectAndReturn(1, 10 * sizeof(test_item_t), MALLOC_CAP_SPIRAM, mock_buffer_10);
-  xSemaphoreCreateMutex_CMockExpectAndReturn(2, (SemaphoreHandle_t)0x2000);
-
-  // Mock expectations for semaphore operations - simplified
-  for (int i = 3; i <= 50; i += 2)
-  {
-    xSemaphoreTake_CMockExpectAndReturn(i, (SemaphoreHandle_t)0x2000, portMAX_DELAY, pdTRUE);
-    xSemaphoreGive_CMockExpectAndReturn(i + 1, (SemaphoreHandle_t)0x2000, pdTRUE);
-  }
-
-  // Mock expectation for semaphore deletion during cleanup
-  vSemaphoreDelete_CMockExpect(51, (SemaphoreHandle_t)0x2000);
-  heap_caps_free_CMockExpect(52, mock_buffer_10);
-
-  // Initialize buffer
-  TEST_ASSERT_TRUE(circular_buffer_init(&test_buf, sizeof(test_item_t), 10));
+  // Use wrapper function for initialization
+  int call_count = 1;
+  TEST_ASSERT_TRUE(mock_circular_buffer_init_success(&call_count, &test_buf, sizeof(test_item_t), 10, mock_buffer_10));
 
   test_item_t item;
 
-  // Fill buffer to capacity
+  // Fill buffer to capacity using wrapper function
   for (int i = 0; i < test_buf.buffer_size; i++)
   {
     item.value = i;
     sprintf(item.name, "item_%d", i);
-    TEST_ASSERT_TRUE(circular_buffer_push(&test_buf, &item));
+    TEST_ASSERT_TRUE(mock_circular_buffer_push(&call_count, &test_buf, &item));
   }
 
-  TEST_ASSERT_EQUAL(test_buf.buffer_size, circular_buffer_count(&test_buf));
+  // Check count using wrapper function
+  TEST_ASSERT_EQUAL(test_buf.buffer_size, mock_circular_buffer_count(&call_count, &test_buf));
 
   // Push beyond capacity - real implementation allows this
   item.value = 999;
   sprintf(item.name, "overflow_item");
-  TEST_ASSERT_TRUE(circular_buffer_push(&test_buf, &item)); // Should succeed
+  TEST_ASSERT_TRUE(mock_circular_buffer_push(&call_count, &test_buf, &item)); // Should succeed
 
   // Count should stay at buffer size limit
-  TEST_ASSERT_EQUAL(test_buf.buffer_size, circular_buffer_count(&test_buf));
+  TEST_ASSERT_EQUAL(test_buf.buffer_size, mock_circular_buffer_count(&call_count, &test_buf));
+
+  // Clean up using wrapper function
+  call_count = mock_circular_buffer_free(call_count, mock_buffer_10);
 
   // Clean up
   circular_buffer_free(&test_buf);
