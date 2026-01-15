@@ -4,7 +4,7 @@ This plan outlines the steps to implement the Heater Control System as defined i
 
 ## Phase 1: Heater Driver (Hardware Abstraction Layer) [checkpoint: ]
 
-- [ ] **Task:** Implement the `heater.h` header file.
+- [x] **Task:** Implement the `heater.h` header file. 8409220
     - [ ] Define the `heater_init()` and `set_heat_power()` function prototypes.
 - [ ] **Task:** Implement the `heater.c` source file.
     - [ ] Write tests for the `heater` module (`docker_tests/unit_tests/main/test_heater.c`).
