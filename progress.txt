@@ -1,0 +1,2 @@
+Last accomplished: Corrected CMock expectation function names, replaced UNITY_LINE_LOCATION with UNITY_LINE_NUM, and ensured correct Mockmock_esp_log function calls in test_heater.c and test_controller.c.
+Next to do: Rerun tests and verify all issues are resolved.

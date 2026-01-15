@@ -1,4 +1,4 @@
-idf_component_register(SRCS "ota.c" "sysmon_wrapper.c" "main.c"
+idf_component_register(SRCS "controller.c" "heater.c" "ota.c" "sysmon_wrapper.c" "main.c"
                                  "startup_tests.c"
                                  "display.c"
                                  "diagnostic.c"

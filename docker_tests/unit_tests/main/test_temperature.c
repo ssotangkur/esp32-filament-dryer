@@ -18,26 +18,18 @@ typedef struct
 // Test data
 static mock_thermistor_config_t test_config;
 
-void setUp(void)
-{
-  // Initialize test configuration
-  test_config.adc_channel = 0;
-  test_config.series_resistor = 10000.0f; // 10kΩ
-  test_config.adc_voltage_reference = 3.3f;
-  test_config.averaging_samples = 5;
-}
-
-void tearDown(void)
-{
-  // Cleanup if needed
-}
-
 /**
  * @brief Test basic temperature calculation
  * Demonstrates simple arithmetic operations
  */
 void test_temperature_reading_normal(void)
 {
+  // Initialize test configuration (moved from setUp)
+  test_config.adc_channel = 0;
+  test_config.series_resistor = 10000.0f; // 10kΩ
+  test_config.adc_voltage_reference = 3.3f;
+  test_config.averaging_samples = 5;
+
   // Simple temperature calculation test
   int adc_raw = 1850;
   float voltage = (adc_raw / 4095.0f) * 3.3f; // 12-bit ADC, 3.3V reference
@@ -59,6 +51,12 @@ void test_temperature_reading_normal(void)
  */
 void test_temperature_reading_disconnected(void)
 {
+  // Initialize test configuration (moved from setUp)
+  test_config.adc_channel = 0;
+  test_config.series_resistor = 10000.0f; // 10kΩ
+  test_config.adc_voltage_reference = 3.3f;
+  test_config.averaging_samples = 5;
+
   // Very low ADC reading (disconnected sensor)
   int adc_raw = 5;
   float voltage = (adc_raw / 4095.0f) * 3.3f;
@@ -76,6 +74,12 @@ void test_temperature_reading_disconnected(void)
  */
 void test_temperature_reading_short_circuit(void)
 {
+  // Initialize test configuration (moved from setUp)
+  test_config.adc_channel = 0;
+  test_config.series_resistor = 10000.0f; // 10kΩ
+  test_config.adc_voltage_reference = 3.3f;
+  test_config.averaging_samples = 5;
+
   // Very high ADC reading (short circuit)
   int adc_raw = 4090;
   float voltage = (adc_raw / 4095.0f) * 3.3f;
@@ -114,6 +118,12 @@ void test_temperature_reading_averaging(void)
  */
 void test_temperature_config_validation(void)
 {
+  // Initialize test configuration (moved from setUp)
+  test_config.adc_channel = 0;
+  test_config.series_resistor = 10000.0f; // 10kΩ
+  test_config.adc_voltage_reference = 3.3f;
+  test_config.averaging_samples = 5;
+  
   // Test valid configuration
   TEST_ASSERT_TRUE(test_config.adc_channel >= 0);
   TEST_ASSERT_GREATER_THAN(0.0f, test_config.series_resistor);

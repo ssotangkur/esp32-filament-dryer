@@ -22,6 +22,8 @@ file(GLOB MOCK_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/mocks/*.c")
 # Unit test sources for ESP32 circular buffer testing
 set(SOURCES
     main/test_main.c
+    main/test_heater.c
+    main/test_controller.c
     main/test_circular_buffer.c       # Real circular buffer tests with ESP-IDF/FreeRTOS
     main/test_temp.c                  # Temperature sensor tests
     main/test_version.c
@@ -30,6 +32,7 @@ set(SOURCES
     /opt/unity/src/unity.c            # Unity testing framework
     /opt/cmock/src/cmock.c            # CMock framework
     ${CMAKE_CURRENT_BINARY_DIR}/cmock_globals.c  # Global variables for CMock plugins
+    /project/main/controller.c        # Controller source from main project
     /project/main/version.c           # Version source from main project
     /project/main/temp.c              # Temperature sensor source for testing
     # Note: circular_buffer.c is included by main/test_circular_buffer.c
