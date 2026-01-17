@@ -64,12 +64,6 @@ void test_calculate_steinhart_hart_coefficients(void)
  */
 void test_temp_sensor_init(void)
 {
-  // Initialize CMock mocks
-  Mockmock_semphr_Init();
-  Mockmock_esp_adc_Init();
-  Mockmock_esp_heap_caps_Init();
-  Mockmock_sysmon_wrapper_Init(); // Initialize sysmon wrapper mock
-
   // Define static mock buffers for the circular buffers
   static uint8_t mock_temp_buffer_1[TEMP_BUFFER_SIZE * sizeof(temp_sample_t)];
   static uint8_t mock_temp_buffer_2[TEMP_BUFFER_SIZE * sizeof(temp_sample_t)];
@@ -80,7 +74,7 @@ void test_temp_sensor_init(void)
   // Mock semaphore creation for subscriptions (called first)
   xSemaphoreCreateMutex_ExpectAndReturn((SemaphoreHandle_t)0x3000);
   xSemaphoreCreateMutex_ExpectAndReturn((SemaphoreHandle_t)0x4000);
-  
+
   // Mock ADC initialization functions - ignore arguments and return success
   adc_oneshot_new_unit_IgnoreAndReturn(ESP_OK);
   adc_cali_create_scheme_curve_fitting_IgnoreAndReturn(ESP_OK);
@@ -116,10 +110,6 @@ void test_temp_sensor_init(void)
  */
 void test_temp_sensor_get_reading(void)
 {
-  // Initialize CMock mocks (this resets expectations and call counts)
-  Mockmock_semphr_Init();
-  Mockmock_esp_heap_caps_Init();
-
   // ===== Test 1: NULL sensor parameter =====
   float result = temp_sensor_get_reading(NULL);
   TEST_ASSERT_EQUAL(-999.0f, result);

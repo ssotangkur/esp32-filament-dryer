@@ -185,11 +185,6 @@ circular_buffer_free(&test_buf);
 xSemaphoreTake_ExpectAndReturn(handle, portMAX_DELAY, pdTRUE);
 xSemaphoreGive_ExpectAndReturn(handle, pdTRUE);
 vSemaphoreDelete_Expect(handle);
-
-// For call counting scenarios, use internal macros:
-// xSemaphoreTake_CMockExpectAndReturn(call_count, handle, portMAX_DELAY, pdTRUE);
-// xSemaphoreGive_CMockExpectAndReturn(call_count + 1, handle, pdTRUE);
-// vSemaphoreDelete_CMockExpect(call_count + 2, handle);
 ```
 
 ## Error Prevention

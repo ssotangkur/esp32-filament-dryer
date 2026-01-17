@@ -6,7 +6,7 @@ This plan outlines the steps to implement the Heater Control System as defined i
 
 - [x] **Task:** Implement the `heater.h` header file. 8409220
     - [ ] Define the `heater_init()` and `set_heat_power()` function prototypes.
-- [ ] **Task:** Implement the `heater.c` source file.
+- [~] **Task:** Implement the `heater.c` source file.
     - [ ] Write tests for the `heater` module (`docker_tests/unit_tests/main/test_heater.c`).
     - [ ] Implement `heater_init()` to configure the GPIO/PWM for the heater.
     - [ ] Implement `set_heat_power()` to control the heater's power level.
