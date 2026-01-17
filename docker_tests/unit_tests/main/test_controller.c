@@ -4,7 +4,6 @@
 // Mocks - Include the generated mock headers
 #include "Mockmock_heater.h"
 #include "Mockmock_semphr.h"
-#include "Mockmock_esp_log.h" // Include the mock for esp_log
 
 // Do NOT include controller.c directly anymore, it will be linked
 // #include "controller.c"
