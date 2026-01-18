@@ -15,15 +15,15 @@
 esp_err_t ota_init(void);
 
 /**
- * @brief Start automatic periodic OTA checking
+ * @brief Perform one-time OTA check at boot
  *
  * This function starts a background task that checks for firmware updates
- * every 5 seconds and automatically installs them when available.
+ * once at boot time and automatically installs them when available.
  * Must be called after ota_init() and after WiFi connection is established.
  *
  * @return ESP_OK on success, or an error code on failure
  */
-esp_err_t ota_start_auto_check(void);
+esp_err_t ota_check_at_boot(void);
 
 /**
  * @brief Start an OTA update from a given HTTPS URL

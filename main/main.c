@@ -35,8 +35,8 @@ void app_main(void)
     // Initialize OTA functionality
     ESP_ERROR_CHECK(ota_init());
 
-    // Start automatic periodic OTA checking (checks every 5 seconds)
-    ESP_ERROR_CHECK(ota_start_auto_check());
+    // Perform one-time OTA check at boot
+    ESP_ERROR_CHECK(ota_check_at_boot());
 
     // Initialize system monitor after WiFi is connected (without HTTP server)
 #ifdef CONFIG_ENABLE_SYSMON

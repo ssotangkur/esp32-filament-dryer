@@ -29,4 +29,4 @@
 
 #define DISPLAY_FULLRESH false
 
-#define BOARD_HEATER_GPIO (10)
+#define BOARD_HEATER_GPIO (3)

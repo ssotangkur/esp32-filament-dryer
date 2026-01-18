@@ -50,52 +50,6 @@ static esp_err_t ota_http_event_handler(esp_http_client_event_t *evt)
   return ESP_OK;
 }
 
-static void ota_task(void *pvParameter)
-{
-  char *url = (char *)pvParameter;
-
-  ESP_LOGI(TAG, "Starting OTA update from: %s", url);
-
-  // Stop LVGL to prevent display crashes during OTA
-  ESP_LOGI(TAG, "Stopping LVGL during OTA update");
-  lvgl_port_stop();
-
-  xSemaphoreTake(ota_mutex, portMAX_DELAY);
-  ota_in_progress = true;
-  ota_progress = 0;
-  xSemaphoreGive(ota_mutex);
-
-  esp_http_client_config_t config = {
-      .url = url,
-      .event_handler = ota_http_event_handler,
-      .keep_alive_enable = true,
-  };
-
-  esp_https_ota_config_t ota_config = {
-      .http_config = &config,
-  };
-
-  esp_err_t ret = esp_https_ota(&ota_config);
-
-  xSemaphoreTake(ota_mutex, portMAX_DELAY);
-  ota_in_progress = false;
-  ota_progress = -1;
-  xSemaphoreGive(ota_mutex);
-
-  if (ret == ESP_OK)
-  {
-    ESP_LOGI(TAG, "OTA update successful, restarting...");
-    esp_restart();
-  }
-  else
-  {
-    ESP_LOGE(TAG, "OTA update failed: %s", esp_err_to_name(ret));
-    lvgl_port_resume(); // Resume LVGL on error
-  }
-
-  vTaskDelete(NULL);
-}
-
 static void ota_https_task(void *pvParameter)
 {
   char *url = (char *)pvParameter;
@@ -546,39 +500,20 @@ int ota_get_progress(void)
   return progress;
 }
 
-// Periodic OTA checking task
-static void ota_check_task(void *pvParameter)
+esp_err_t ota_check_at_boot(void)
 {
-  ESP_LOGI(TAG, "OTA check task started - checking for updates every 5 seconds");
+  ESP_LOGI(TAG, "Performing one-time OTA check at boot");
 
-  while (1)
+  // Check for OTA updates synchronously at boot
+  if (ota_check_for_update(OTA_URL))
   {
-    // Check for OTA updates
-    if (ota_check_for_update(OTA_URL))
-    {
-      ESP_LOGI(TAG, "New firmware version available! Starting update...");
-      ota_update_from_url(OTA_URL);
-    }
-    else
-    {
-      ESP_LOGD(TAG, "Firmware is up to date");
-    }
-
-    // Wait 5 seconds before next check
-    vTaskDelay(pdMS_TO_TICKS(30000));
+    ESP_LOGI(TAG, "New firmware version available! Starting update...");
+    ota_update_from_url(OTA_URL);
   }
-}
-
-esp_err_t ota_start_auto_check(void)
-{
-  // Start periodic OTA checking task (checks every 30 seconds)
-  // Use sysmon wrapper to enable stack monitoring
-  if (sysmon_xTaskCreate(&ota_check_task, "ota_check_task", 4096, NULL, 5, NULL) != pdPASS)
+  else
   {
-    ESP_LOGE(TAG, "Failed to create OTA check task");
-    return ESP_ERR_NO_MEM;
+    ESP_LOGI(TAG, "Firmware is up to date - no boot-time update needed");
   }
 
-  ESP_LOGI(TAG, "Automatic OTA checking started");
   return ESP_OK;
 }

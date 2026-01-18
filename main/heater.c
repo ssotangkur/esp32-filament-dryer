@@ -17,7 +17,7 @@ void heater_init(void)
         .speed_mode = LEDC_LOW_SPEED_MODE,
         .timer_num = LEDC_TIMER_0,
         .duty_resolution = LEDC_TIMER_8_BIT, // 0 - 255
-        .freq_hz = 5000,                     // Set output frequency at 5 kHz
+        .freq_hz = 100,                      // Set output frequency at 100 Hz
         .clk_cfg = LEDC_AUTO_CLK,
     };
     ESP_ERROR_CHECK(ledc_timer_config(&ledc_timer));
