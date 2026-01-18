@@ -1,4 +1,7 @@
 @echo off
+REM Change to project root directory (parent of scripts directory)
+cd %~dp0..
+
 echo Incrementing firmware patch version...
 python scripts\increment_version.py
 if %ERRORLEVEL% NEQ 0 (
@@ -17,6 +20,7 @@ if %ERRORLEVEL% NEQ 0 (
 )
 
 echo Copying firmware binary to expected location...
+if not exist build\esp32s3 mkdir build\esp32s3
 copy build\esp32_filament_dryer.bin build\esp32s3\firmware.bin
 if %ERRORLEVEL% NEQ 0 (
     echo Failed to copy firmware binary
