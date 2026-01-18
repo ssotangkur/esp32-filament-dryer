@@ -27,15 +27,13 @@ static lv_obj_t *air_vr_label = NULL; // Air voltage|resistance
 static lv_obj_t *heater_temp_label = NULL;
 static lv_obj_t *heater_vr_label = NULL; // Heater voltage|resistance
 static lv_obj_t *ip_label = NULL;
-static lv_obj_t *temp_chart = NULL;
-static lv_chart_series_t *temp_series = NULL;
 static lv_timer_t *temp_update_timer = NULL;
 
-// Animation variables
-static lv_obj_t *animated_btn = NULL;
-
-// Forward declaration for animation callback
-static void button_animation_cb(lv_timer_t *timer);
+// Temperature meter variables
+static lv_obj_t *air_meter = NULL;
+static lv_obj_t *heater_meter = NULL;
+static lv_meter_indicator_t *air_needle = NULL;
+static lv_meter_indicator_t *heater_needle = NULL;
 
 // FPS display update callback
 static void fps_update_cb(lv_timer_t *timer)
@@ -79,6 +77,12 @@ static void temp_update_cb(lv_timer_t *timer)
 
         lv_label_set_text(air_temp_label, buf);
         // printf("Air temperature updated: %.1f°C (display: %s)\n", temp, buf);
+
+        // Update air temperature meter
+        if (air_meter != NULL && air_needle != NULL)
+        {
+          lv_meter_set_indicator_value(air_meter, air_needle, (int)temp);
+        }
       }
     }
   }
@@ -146,6 +150,12 @@ static void temp_update_cb(lv_timer_t *timer)
 
         lv_label_set_text(heater_temp_label, buf);
         // printf("Heater temperature updated: %.1f°C (display: %s)\n", temp, buf);
+
+        // Update heater temperature meter
+        if (heater_meter != NULL && heater_needle != NULL)
+        {
+          lv_meter_set_indicator_value(heater_meter, heater_needle, (int)temp);
+        }
       }
     }
   }
@@ -183,39 +193,6 @@ static void temp_update_cb(lv_timer_t *timer)
         lv_label_set_text(heater_vr_label, buf);
         // printf("Heater voltage/resistance updated: %.2fV|%.1fk (display: %s)\n", voltage, resistance_kohm, buf);
       }
-    }
-  }
-
-  // Update temperature chart
-  if (temp_chart != NULL && temp_series != NULL)
-  {
-    temp_sensor_handle_t air_sensor = temp_sensor_get_air_sensor();
-    if (air_sensor != NULL)
-    {
-      size_t sample_count = temp_sensor_get_sample_count(air_sensor);
-
-      // Clear existing points
-      lv_chart_set_point_count(temp_chart, 0);
-
-      if (sample_count > 0)
-      {
-        // Show last 20 samples (or all if less than 20)
-        size_t points_to_show = (sample_count < 20) ? sample_count : 20;
-        lv_chart_set_point_count(temp_chart, points_to_show);
-
-        // Add points to chart (oldest to newest)
-        for (size_t i = 0; i < points_to_show; i++)
-        {
-          temp_sample_t sample;
-          if (temp_sensor_get_sample(air_sensor, sample_count - points_to_show + i, &sample))
-          {
-            // Convert to integer for chart (multiply by 10 to preserve one decimal)
-            lv_chart_set_next_value(temp_chart, temp_series, (int32_t)(sample.temperature * 10));
-          }
-        }
-      }
-
-      lv_chart_refresh(temp_chart);
     }
   }
 
@@ -417,16 +394,6 @@ void init_display(void)
 /* Simple LVGL demo */
 void lvgl_demo(void)
 {
-  /* Create a button - positioned below the temperature chart */
-  animated_btn = lv_btn_create(lv_scr_act());
-  lv_obj_set_pos(animated_btn, 25, 150); // Position below the chart
-  lv_obj_set_size(animated_btn, 120, 50);
-
-  /* Create a label on the button */
-  lv_obj_t *label = lv_label_create(animated_btn);
-  lv_label_set_text(label, "Hello LVGL!");
-  lv_obj_center(label);
-
   /* Create another label - positioned below button */
   lv_obj_t *info_label = lv_label_create(lv_scr_act());
   lv_label_set_text(info_label, "ESP32-S3 + LilyGo T-Display");
@@ -457,18 +424,6 @@ void lvgl_demo(void)
   lv_label_set_text(heater_vr_label, "Heat: --V|--k");
   lv_obj_set_pos(heater_vr_label, 10, 260); // Heater voltage|resistance
 
-  /* Create temperature chart */
-  temp_chart = lv_chart_create(lv_scr_act());
-  lv_obj_set_pos(temp_chart, 40, 10);    // Position above the animated button
-  lv_obj_set_size(temp_chart, 120, 120); // Chart size
-  lv_chart_set_type(temp_chart, LV_CHART_TYPE_LINE);
-  lv_chart_set_range(temp_chart, LV_CHART_AXIS_PRIMARY_Y, 0, 1000); // 0-100°C (multiplied by 10)
-  lv_chart_set_point_count(temp_chart, 0);                          // Start with no points
-  lv_chart_set_axis_tick(temp_chart, LV_CHART_AXIS_PRIMARY_Y, 5, 2, 5, 3, true, 20);
-
-  /* Create chart series */
-  temp_series = lv_chart_add_series(temp_chart, lv_palette_main(LV_PALETTE_RED), LV_CHART_AXIS_PRIMARY_Y);
-
   /* Create IP address display label */
   ip_label = lv_label_create(lv_scr_act());
   lv_label_set_text(ip_label, "IP: Not connected");
@@ -479,33 +434,66 @@ void lvgl_demo(void)
   lv_label_set_text(fps_label, "FPS: 0");
   lv_obj_set_pos(fps_label, 10, 300); // Position after IP label
 
+  /* Create air temperature meter */
+  air_meter = lv_meter_create(lv_scr_act());
+  lv_obj_set_style_pad_all(air_meter, 0, LV_PART_MAIN);
+  lv_obj_set_size(air_meter, 80, 80);
+  lv_obj_set_pos(air_meter, 10, 10);
+
+  lv_meter_scale_t *air_scale = lv_meter_add_scale(air_meter);
+  lv_meter_set_scale_ticks(air_meter, air_scale, 7, 2, 10, lv_palette_main(LV_PALETTE_GREY));
+  lv_meter_set_scale_range(air_meter, air_scale, 0, 120, 270, 12);
+
+  // Green arc 45-70°C
+  lv_meter_indicator_t *air_green_arc = lv_meter_add_arc(air_meter, air_scale, 3, lv_color_hex(0x00FF00), 0);
+  lv_meter_set_indicator_start_value(air_meter, air_green_arc, 45);
+  lv_meter_set_indicator_end_value(air_meter, air_green_arc, 70);
+  air_green_arc = lv_meter_add_scale_lines(
+      air_meter,
+      air_scale,
+      lv_palette_main(LV_PALETTE_GREEN),
+      lv_palette_main(LV_PALETTE_GREEN),
+      false,
+      0);
+  lv_meter_set_indicator_start_value(air_meter, air_green_arc, 45);
+  lv_meter_set_indicator_end_value(air_meter, air_green_arc, 70);
+
+  // Red arc 70-120°C
+  lv_meter_indicator_t *air_red_arc = lv_meter_add_arc(air_meter, air_scale, 8, lv_color_hex(0xFF0000), -1);
+  lv_meter_set_indicator_start_value(air_meter, air_red_arc, 70);
+  lv_meter_set_indicator_end_value(air_meter, air_red_arc, 120);
+
+  // Needle indicator
+  air_needle = lv_meter_add_needle_line(air_meter, air_scale, 4, lv_color_hex(0xFFFFFF), -10);
+
+  /* Create heater temperature meter */
+  heater_meter = lv_meter_create(lv_scr_act());
+  lv_obj_set_size(heater_meter, 75, 80);
+  lv_obj_set_pos(heater_meter, 95, 10);
+
+  lv_meter_scale_t *heater_scale = lv_meter_add_scale(heater_meter);
+  lv_meter_set_scale_ticks(heater_meter, heater_scale, 7, 4, 10, lv_color_hex(0xFFFFFF));
+  lv_meter_set_scale_range(heater_meter, heater_scale, 0, 120, 270, 90);
+
+  // Green arc 95-105°C
+  lv_meter_indicator_t *heater_green_arc = lv_meter_add_arc(heater_meter, heater_scale, 8, lv_color_hex(0x00FF00), -1);
+  lv_meter_set_indicator_start_value(heater_meter, heater_green_arc, 95);
+  lv_meter_set_indicator_end_value(heater_meter, heater_green_arc, 105);
+
+  // Red arc 105-120°C
+  lv_meter_indicator_t *heater_red_arc = lv_meter_add_arc(heater_meter, heater_scale, 8, lv_color_hex(0xFF0000), -1);
+  lv_meter_set_indicator_start_value(heater_meter, heater_red_arc, 105);
+  lv_meter_set_indicator_end_value(heater_meter, heater_red_arc, 120);
+
+  // Needle indicator
+  heater_needle = lv_meter_add_needle_line(heater_meter, heater_scale, 4, lv_color_hex(0xFFFFFF), -10);
+
   /* Start temperature display update timer (update every 1000ms) */
   temp_update_timer = lv_timer_create(temp_update_cb, 1000, NULL);
 
   /* Start FPS display update timer (update every 500ms) */
   fps_update_timer = lv_timer_create(fps_update_cb, 500, NULL);
 
-  /* Start animation timer for the button (move left and right) */
-  lv_timer_create(button_animation_cb, 16, NULL); // ~60 FPS animation
-
   /* Start FPS monitoring */
   fps_monitor_start();
-}
-
-// Animation callback for button movement
-static void button_animation_cb(lv_timer_t *timer)
-{
-  static int x_pos = 25;
-  static int direction = 1; // 1 = right, -1 = left
-
-  // Move button
-  x_pos += direction * 2;
-
-  // Bounce at edges
-  if (x_pos <= 0 || x_pos >= 50)
-  { // 170 - 120 = 50px max movement
-    direction = -direction;
-  }
-
-  lv_obj_set_pos(animated_btn, x_pos, 150);
 }
