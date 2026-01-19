@@ -251,12 +251,12 @@ static void temp_task(void *pvParameters)
         // Check for invalid readings
         if (temperature < -50.0f || temperature > 150.0f)
         {
-          ESP_LOGW(TAG, "Invalid temperature reading: %.2f°C (Voltage: %.3fV, Resistance: %.0fΩ)", temperature, voltage, resistance);
+          ESP_LOGW(TAG, "Invalid temperature reading: %.2fC (Voltage: %.3fV, Resistance: %.0f ohm)", temperature, voltage, resistance);
           temperature = -999.0f; // Mark as invalid
         }
         else
         {
-          ESP_LOGD(TAG, "Calculated temperature: %.2f°C (Voltage: %.3fV, Resistance: %.0fΩ)", temperature, voltage, resistance);
+          ESP_LOGD(TAG, "Calculated temperature: %.2fC (Voltage: %.3fV, Resistance: %.0f ohm)", temperature, voltage, resistance);
         }
 
         // Create sample
@@ -366,7 +366,7 @@ void temp_sensor_init(void)
       .averaging_samples = TEMP_AVERAGE_SAMPLES};
   air_config.coeffs = air_coeffs; // Assign calculated coefficients
 
-  ESP_LOGI(TAG, "Air sensor calibration: %.0f°C@%.0fΩ, %.0f°C@%.0fΩ, %.0f°C@%.0fΩ",
+  ESP_LOGI(TAG, "Air sensor calibration: %.0fC@%.0f ohm, %.0fC@%.0f ohm, %.0fC@%.0f ohm",
            air_cal_point_1.temperature_celsius, air_cal_point_1.resistance_ohms,
            air_cal_point_2.temperature_celsius, air_cal_point_2.resistance_ohms,
            air_cal_point_3.temperature_celsius, air_cal_point_3.resistance_ohms);
@@ -417,7 +417,7 @@ void temp_sensor_init(void)
     return;
   }
 
-  ESP_LOGI(TAG, "Heater sensor calibration: %.0f°C@%.0fΩ, %.0f°C@%.0fΩ, %.0f°C@%.0fΩ",
+  ESP_LOGI(TAG, "Heater sensor calibration: %.0fC@%.0f ohm, %.0fC@%.0f ohm, %.0fC@%.0f ohm",
            heater_cal_point_1.temperature_celsius, heater_cal_point_1.resistance_ohms,
            heater_cal_point_2.temperature_celsius, heater_cal_point_2.resistance_ohms,
            heater_cal_point_3.temperature_celsius, heater_cal_point_3.resistance_ohms);

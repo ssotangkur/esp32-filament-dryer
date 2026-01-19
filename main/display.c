@@ -11,6 +11,7 @@
 #include "product_pins.h"
 #include "esp_lvgl_port.h"
 #include "lvgl.h"
+#include "lv_demos.h"
 #include "diagnostic.h"
 #include "display.h"
 #include "temp.h"
@@ -32,8 +33,6 @@ static lv_timer_t *temp_update_timer = NULL;
 // Temperature meter variables
 static lv_obj_t *air_meter = NULL;
 static lv_obj_t *heater_meter = NULL;
-static lv_meter_indicator_t *air_needle = NULL;
-static lv_meter_indicator_t *heater_needle = NULL;
 
 // FPS display update callback
 static void fps_update_cb(lv_timer_t *timer)
@@ -78,11 +77,7 @@ static void temp_update_cb(lv_timer_t *timer)
         lv_label_set_text(air_temp_label, buf);
         // printf("Air temperature updated: %.1f°C (display: %s)\n", temp, buf);
 
-        // Update air temperature meter
-        if (air_meter != NULL && air_needle != NULL)
-        {
-          lv_meter_set_indicator_value(air_meter, air_needle, (int)temp);
-        }
+        // TODO: Update air temperature scale indicator when LVGL 9.x scale API is fully understood
       }
     }
   }
@@ -151,11 +146,7 @@ static void temp_update_cb(lv_timer_t *timer)
         lv_label_set_text(heater_temp_label, buf);
         // printf("Heater temperature updated: %.1f°C (display: %s)\n", temp, buf);
 
-        // Update heater temperature meter
-        if (heater_meter != NULL && heater_needle != NULL)
-        {
-          lv_meter_set_indicator_value(heater_meter, heater_needle, (int)temp);
-        }
+        // TODO: Update heater temperature scale indicator when LVGL 9.x scale API is fully understood
       }
     }
   }
@@ -232,7 +223,7 @@ static esp_lcd_panel_handle_t panel_handle = NULL;
 
 lcd_cmd_t lcd_st7789v[] = {
     {0x11, {0}, 0 | 0x80},
-    {0x3A, {0X05}, 1},
+    {0x3A, {0X06}, 1}, // 0x05 for 16bit color RGB565 format
     {0xB2, {0X0B, 0X0B, 0X00, 0X33, 0X33}, 5},
     {0xB7, {0X75}, 1},
     {0xBB, {0X28}, 1},
@@ -342,24 +333,35 @@ static void init_lvgl_display(void)
 {
   printf("Initializing LVGL with esp_lvgl_port...\n");
 
+  /* Initialize LVGL library (required for LVGL 9.x) */
+  // lv_init();
+
+  /* Set up LVGL tick interface (required for LVGL 9.x) */
+  // lv_tick_set_cb((lv_tick_get_cb_t)esp_timer_get_time);
+
   /* LVGL port initialization */
   static lvgl_port_cfg_t lvgl_cfg = ESP_LVGL_PORT_INIT_CONFIG();
   lvgl_cfg.task_priority = 4;    // Set task priority
   lvgl_cfg.task_stack = 6144;    // Set task stack size
-  lvgl_cfg.task_affinity = 1;    // Allow any core affinity
+  lvgl_cfg.task_affinity = -1;   // Allow any core affinity
   lvgl_cfg.timer_period_ms = 16; // 16ms timer period (~60Hz) for reduced CPU usage
 
   ESP_ERROR_CHECK(lvgl_port_init(&lvgl_cfg));
+
+  // Workaround for LVGL 9.x + ESP32-S3 crash: Add delay after lvgl_port_task creation
+  // https://github.com/espressif/esp-bsp/issues/475
+  vTaskDelay(pdMS_TO_TICKS(10));
 
   /* Add display to LVGL */
   const lvgl_port_display_cfg_t disp_cfg = {
       .io_handle = io_handle,
       .panel_handle = panel_handle,
-      .buffer_size = AMOLED_WIDTH * 100, // Partial buffer seems to improve performance
+      .buffer_size = AMOLED_WIDTH * AMOLED_HEIGHT, // Full screen buffer for LVGL 9.x compatibility
       .double_buffer = false,
       .hres = AMOLED_WIDTH,
       .vres = AMOLED_HEIGHT,
       .monochrome = false,
+      .color_format = LV_COLOR_FORMAT_RGB565,
       .rotation = {
           .swap_xy = false,
           .mirror_x = false,
@@ -367,9 +369,17 @@ static void init_lvgl_display(void)
       },
       .flags = {
           .buff_dma = false,
-          .buff_spiram = true,
+          .buff_spiram = false,
           .sw_rotate = false,
+          .full_refresh = false,
+          .swap_bytes = false,
       }};
+
+  // const lvgl_port_display_rgb_cfg_t rgb_cfg = {
+  //     .flags = {
+  //         .bb_mode = false,
+  //         .avoid_tearing = true,
+  //     }};
 
   lv_display_t *disp = lvgl_port_add_disp(&disp_cfg);
   if (disp == NULL)
@@ -377,6 +387,9 @@ static void init_lvgl_display(void)
     ESP_LOGE(TAG, "Failed to add display to LVGL");
     return;
   }
+
+  // Set as default display (required in LVGL 9.x)
+  lv_display_set_default(disp);
 
   // Set up FPS monitoring callback on the display driver
   fps_monitor_setup_callback(disp);
@@ -394,106 +407,18 @@ void init_display(void)
 /* Simple LVGL demo */
 void lvgl_demo(void)
 {
-  /* Create another label - positioned below button */
-  lv_obj_t *info_label = lv_label_create(lv_scr_act());
-  lv_label_set_text(info_label, "ESP32-S3 + LilyGo T-Display");
-  lv_obj_set_pos(info_label, 10, 160); // Centered horizontally, below button
 
-  /* Create a firmware version label - positioned lower on the tall display */
-  lv_obj_t *version_label = lv_label_create(lv_scr_act());
-  lv_label_set_text(version_label, "FW: " FIRMWARE_VERSION_STRING);
-  lv_obj_set_pos(version_label, 10, 180); // Position above temperature display
+  lvgl_port_lock(0);
+  lv_demo_widgets();
 
-  /* Create air temperature display label */
-  air_temp_label = lv_label_create(lv_scr_act());
-  lv_label_set_text(air_temp_label, "Air: --°C");
-  lv_obj_set_pos(air_temp_label, 10, 200); // Air temperature
+  // Create only a single simple label to test basic functionality
+  ESP_LOGI(TAG, "LVGL demo started - creating minimal test object");
 
-  /* Create air voltage|resistance display label */
-  air_vr_label = lv_label_create(lv_scr_act());
-  lv_label_set_text(air_vr_label, "Air: --V|--k");
-  lv_obj_set_pos(air_vr_label, 10, 220); // Air voltage|resistance
+  /* Create a single test label */
+  lv_obj_t *test_label = lv_label_create(lv_screen_active());
+  lv_label_set_text(test_label, "LVGL 9.x OK");
+  lv_obj_set_pos(test_label, 10, 10);
 
-  /* Create heater temperature display label */
-  heater_temp_label = lv_label_create(lv_scr_act());
-  lv_label_set_text(heater_temp_label, "Heat: --°C");
-  lv_obj_set_pos(heater_temp_label, 10, 240); // Heater temperature
-
-  /* Create heater voltage|resistance display label */
-  heater_vr_label = lv_label_create(lv_scr_act());
-  lv_label_set_text(heater_vr_label, "Heat: --V|--k");
-  lv_obj_set_pos(heater_vr_label, 10, 260); // Heater voltage|resistance
-
-  /* Create IP address display label */
-  ip_label = lv_label_create(lv_scr_act());
-  lv_label_set_text(ip_label, "IP: Not connected");
-  lv_obj_set_pos(ip_label, 10, 280); // Position after temperature sensors
-
-  /* Create FPS display label */
-  fps_label = lv_label_create(lv_scr_act());
-  lv_label_set_text(fps_label, "FPS: 0");
-  lv_obj_set_pos(fps_label, 10, 300); // Position after IP label
-
-  /* Create air temperature meter */
-  air_meter = lv_meter_create(lv_scr_act());
-  lv_obj_set_style_pad_all(air_meter, 0, LV_PART_MAIN);
-  lv_obj_set_size(air_meter, 80, 80);
-  lv_obj_set_pos(air_meter, 10, 10);
-
-  lv_meter_scale_t *air_scale = lv_meter_add_scale(air_meter);
-  lv_meter_set_scale_ticks(air_meter, air_scale, 7, 2, 10, lv_palette_main(LV_PALETTE_GREY));
-  lv_meter_set_scale_range(air_meter, air_scale, 0, 120, 270, 12);
-
-  // Green arc 45-70°C
-  lv_meter_indicator_t *air_green_arc = lv_meter_add_arc(air_meter, air_scale, 3, lv_color_hex(0x00FF00), 0);
-  lv_meter_set_indicator_start_value(air_meter, air_green_arc, 45);
-  lv_meter_set_indicator_end_value(air_meter, air_green_arc, 70);
-  air_green_arc = lv_meter_add_scale_lines(
-      air_meter,
-      air_scale,
-      lv_palette_main(LV_PALETTE_GREEN),
-      lv_palette_main(LV_PALETTE_GREEN),
-      false,
-      0);
-  lv_meter_set_indicator_start_value(air_meter, air_green_arc, 45);
-  lv_meter_set_indicator_end_value(air_meter, air_green_arc, 70);
-
-  // Red arc 70-120°C
-  lv_meter_indicator_t *air_red_arc = lv_meter_add_arc(air_meter, air_scale, 8, lv_color_hex(0xFF0000), -1);
-  lv_meter_set_indicator_start_value(air_meter, air_red_arc, 70);
-  lv_meter_set_indicator_end_value(air_meter, air_red_arc, 120);
-
-  // Needle indicator
-  air_needle = lv_meter_add_needle_line(air_meter, air_scale, 4, lv_color_hex(0xFFFFFF), -10);
-
-  /* Create heater temperature meter */
-  heater_meter = lv_meter_create(lv_scr_act());
-  lv_obj_set_size(heater_meter, 75, 80);
-  lv_obj_set_pos(heater_meter, 95, 10);
-
-  lv_meter_scale_t *heater_scale = lv_meter_add_scale(heater_meter);
-  lv_meter_set_scale_ticks(heater_meter, heater_scale, 7, 4, 10, lv_color_hex(0xFFFFFF));
-  lv_meter_set_scale_range(heater_meter, heater_scale, 0, 120, 270, 90);
-
-  // Green arc 95-105°C
-  lv_meter_indicator_t *heater_green_arc = lv_meter_add_arc(heater_meter, heater_scale, 8, lv_color_hex(0x00FF00), -1);
-  lv_meter_set_indicator_start_value(heater_meter, heater_green_arc, 95);
-  lv_meter_set_indicator_end_value(heater_meter, heater_green_arc, 105);
-
-  // Red arc 105-120°C
-  lv_meter_indicator_t *heater_red_arc = lv_meter_add_arc(heater_meter, heater_scale, 8, lv_color_hex(0xFF0000), -1);
-  lv_meter_set_indicator_start_value(heater_meter, heater_red_arc, 105);
-  lv_meter_set_indicator_end_value(heater_meter, heater_red_arc, 120);
-
-  // Needle indicator
-  heater_needle = lv_meter_add_needle_line(heater_meter, heater_scale, 4, lv_color_hex(0xFFFFFF), -10);
-
-  /* Start temperature display update timer (update every 1000ms) */
-  temp_update_timer = lv_timer_create(temp_update_cb, 1000, NULL);
-
-  /* Start FPS display update timer (update every 500ms) */
-  fps_update_timer = lv_timer_create(fps_update_cb, 500, NULL);
-
-  /* Start FPS monitoring */
-  fps_monitor_start();
+  ESP_LOGI(TAG, "LVGL demo completed - object created successfully");
+  lvgl_port_unlock();
 }

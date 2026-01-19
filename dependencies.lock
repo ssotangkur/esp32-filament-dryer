@@ -28,12 +28,12 @@ dependencies:
       type: service
     version: 1.20.3
   lvgl/lvgl:
-    component_hash: d7c1ac037ae6e85d94897f807d6e7ba0946a83e720074fc95a4f6241da9f9f53
+    component_hash: 17e68bfd21f0edf4c3ee838e2273da840bf3930e5dbc3bfa6c1190c3aed41f9f
     dependencies: []
     source:
       registry_url: https://components.espressif.com/
       type: service
-    version: 8.4.0
+    version: 9.4.0
   ssotangkur/sysmon:
     component_hash: bfcc23fe4bac6d255b655e337a9052a0f1bf6223f41d88aec3a4fc02d6d7df0a
     dependencies:
@@ -50,6 +50,6 @@ direct_dependencies:
 - joltwallet/littlefs
 - lvgl/lvgl
 - ssotangkur/sysmon
-manifest_hash: 5103a7b14a1ea66eb279ee069be9a2d44e9fae8e09a02b867c0a41cb24cda410
+manifest_hash: d4cff7003776949eefef03899093268107471f1a24e01e00b5d135f56d5cb85a
 target: esp32s3
 version: 2.0.0

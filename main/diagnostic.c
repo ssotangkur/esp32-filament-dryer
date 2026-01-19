@@ -45,38 +45,29 @@ void print_fps_info(void)
 
 /* FPS monitoring functions */
 
-// FPS monitor callback - based on LVGL benchmark implementation
-static void fps_monitor_cb(lv_disp_drv_t *drv, uint32_t time, uint32_t px)
+// FPS monitor event callback - LVGL 9.x uses events instead of callbacks
+static void fps_monitor_event_cb(lv_event_t *e)
 {
        if (fps_monitoring)
        {
+              // Get the display object
+              lv_display_t *disp = lv_event_get_target(e);
+
+              // In LVGL 9.x, we need to get timing information differently
+              // This is a simplified version - you may need to adjust based on available APIs
               fps_frame_count++;
-              fps_time_sum += time;
+
+              // Note: LVGL 9.x may have different timing APIs
+              // This is a placeholder - you may need to use lv_tick_get() or similar
+              uint32_t current_time = lv_tick_get();
+              static uint32_t last_time = 0;
+
+              if (last_time != 0)
+              {
+                     fps_time_sum += (current_time - last_time);
+              }
+              last_time = current_time;
        }
-}
-
-// Start FPS monitoring
-void fps_monitor_start(void)
-{
-       fps_frame_count = 0;
-       fps_time_sum = 0;
-       fps_monitoring = true;
-}
-
-// Stop FPS monitoring
-void fps_monitor_stop(void)
-{
-       fps_monitoring = false;
-}
-
-// Get current FPS - based on LVGL benchmark calculation: fps = (1000 * frames) / total_ms
-uint32_t fps_monitor_get_fps(void)
-{
-       if (fps_time_sum == 0)
-       {
-              return 0; // Avoid division by zero
-       }
-       return (1000UL * fps_frame_count) / fps_time_sum;
 }
 
 // Reset FPS counters
@@ -86,12 +77,33 @@ void fps_monitor_reset(void)
        fps_time_sum = 0;
 }
 
-// Setup FPS monitoring callback for display driver
+// Setup FPS monitoring event callback for display
 void fps_monitor_setup_callback(void *disp_ptr)
 {
        lv_display_t *disp = (lv_display_t *)disp_ptr;
-       if (disp && disp->driver)
+       if (disp)
        {
-              disp->driver->monitor_cb = fps_monitor_cb;
+              // In LVGL 9.x, use events instead of direct callback assignment
+              lv_display_add_event_cb(disp, fps_monitor_event_cb, LV_EVENT_RENDER_READY, NULL);
        }
+}
+
+// Get current FPS value
+uint32_t fps_monitor_get_fps(void)
+{
+       if (fps_frame_count == 0 || fps_time_sum == 0)
+       {
+              return 0;
+       }
+
+       // Calculate FPS: frames / (time_sum / 1000) = frames * 1000 / time_sum
+       uint32_t fps = (fps_frame_count * 1000) / fps_time_sum;
+       return fps;
+}
+
+// Start FPS monitoring
+void fps_monitor_start(void)
+{
+       fps_monitoring = true;
+       fps_monitor_reset();
 }

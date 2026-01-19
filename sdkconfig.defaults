@@ -53,3 +53,7 @@ CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y
 # SYSMON Configuration
 # Need to change the default control port so we can start another http server
 CONFIG_SYSMON_HTTPD_CTRL_PORT=32767
+
+# Task Watchdog Configuration
+# Increase timeout to handle LVGL operations that can take longer
+CONFIG_ESP_TASK_WDT_TIMEOUT_S=10

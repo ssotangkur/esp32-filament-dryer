@@ -55,5 +55,6 @@ void app_main(void)
     // Start FPS monitoring
     fps_monitor_start();
 
+    // Initialize and start LVGL demo
     lvgl_demo();
 }
