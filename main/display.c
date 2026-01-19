@@ -223,7 +223,7 @@ static esp_lcd_panel_handle_t panel_handle = NULL;
 
 lcd_cmd_t lcd_st7789v[] = {
     {0x11, {0}, 0 | 0x80},
-    {0x3A, {0X06}, 1}, // 0x05 for 16bit color RGB565 format
+    {0x3A, {0X05}, 1}, // 0x05 for 16bit color RGB565 format
     {0xB2, {0X0B, 0X0B, 0X00, 0X33, 0X33}, 5},
     {0xB7, {0X75}, 1},
     {0xBB, {0X28}, 1},
@@ -372,7 +372,7 @@ static void init_lvgl_display(void)
           .buff_spiram = false,
           .sw_rotate = false,
           .full_refresh = false,
-          .swap_bytes = false,
+          .swap_bytes = true,
       }};
 
   // const lvgl_port_display_rgb_cfg_t rgb_cfg = {
