@@ -1,7 +1,6 @@
 ---
 description: Automates the git commit process by analyzing changes, generating appropriate commit messages following project conventions, and executing the commit with proper validation. Handles staged files, modified files, and conflicts according to specified rules.
 mode: subagent
-model: anthropic/claude-3-5-sonnet-20241022
 tools:
   bash: true
   read: true
