@@ -9,7 +9,7 @@ struct analog_dial_t
   int32_t needle_length;
 };
 
-static void set_analog_dial_value(struct analog_dial_t *dial, int32_t value)
+void set_analog_dial_value(struct analog_dial_t *dial, int32_t value)
 {
   lv_scale_set_line_needle_value(
       dial->scale,
