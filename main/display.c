@@ -34,6 +34,13 @@ static lv_timer_t *temp_update_timer = NULL;
 static lv_obj_t *air_meter = NULL;
 static lv_obj_t *heater_meter = NULL;
 
+static lv_obj_t *needle_line;
+
+static void set_needle_line_value(lv_obj_t *obj, int32_t v)
+{
+  lv_scale_set_line_needle_value(obj, needle_line, 60, v);
+}
+
 // FPS display update callback
 static void fps_update_cb(lv_timer_t *timer)
 {
@@ -268,7 +275,7 @@ void init_lcd_display(void)
           BOARD_TFT_DATA7,
       },
       .bus_width = 8,
-      .max_transfer_bytes = AMOLED_HEIGHT * AMOLED_WIDTH * sizeof(uint16_t), // Full screen capacity
+      .max_transfer_bytes = AMOLED_HEIGHT * 32 * sizeof(uint16_t), // Full screen capacity
       .psram_trans_align = 64,
       .sram_trans_align = 4};
   ESP_ERROR_CHECK(esp_lcd_new_i80_bus(&bus_config, &i80_bus));
@@ -343,7 +350,7 @@ static void init_lvgl_display(void)
   static lvgl_port_cfg_t lvgl_cfg = ESP_LVGL_PORT_INIT_CONFIG();
   lvgl_cfg.task_priority = 4;    // Set task priority
   lvgl_cfg.task_stack = 6144;    // Set task stack size
-  lvgl_cfg.task_affinity = -1;   // Allow any core affinity
+  lvgl_cfg.task_affinity = 1;    // Allow any core affinity
   lvgl_cfg.timer_period_ms = 16; // 16ms timer period (~60Hz) for reduced CPU usage
 
   ESP_ERROR_CHECK(lvgl_port_init(&lvgl_cfg));
@@ -356,7 +363,7 @@ static void init_lvgl_display(void)
   const lvgl_port_display_cfg_t disp_cfg = {
       .io_handle = io_handle,
       .panel_handle = panel_handle,
-      .buffer_size = AMOLED_WIDTH * AMOLED_HEIGHT, // Full screen buffer for LVGL 9.x compatibility
+      .buffer_size = AMOLED_WIDTH * 32, // Full screen buffer for LVGL 9.x compatibility
       .double_buffer = false,
       .hres = AMOLED_WIDTH,
       .vres = AMOLED_HEIGHT,
@@ -375,12 +382,6 @@ static void init_lvgl_display(void)
           .swap_bytes = true,
       }};
 
-  // const lvgl_port_display_rgb_cfg_t rgb_cfg = {
-  //     .flags = {
-  //         .bb_mode = false,
-  //         .avoid_tearing = true,
-  //     }};
-
   lv_display_t *disp = lvgl_port_add_disp(&disp_cfg);
   if (disp == NULL)
   {
@@ -392,7 +393,7 @@ static void init_lvgl_display(void)
   lv_display_set_default(disp);
 
   // Set up FPS monitoring callback on the display driver
-  fps_monitor_setup_callback(disp);
+  // fps_monitor_setup_callback(disp);
 
   printf("LVGL initialized successfully!\n");
 }
@@ -409,15 +410,57 @@ void lvgl_demo(void)
 {
 
   lvgl_port_lock(0);
-  lv_demo_widgets();
 
   // Create only a single simple label to test basic functionality
   ESP_LOGI(TAG, "LVGL demo started - creating minimal test object");
 
+  /*Change the active screen's background color*/
+  lv_obj_set_style_bg_color(lv_screen_active(), lv_palette_darken(LV_PALETTE_GREY, 2), LV_PART_MAIN);
+
+  lv_obj_set_layout(lv_screen_active(), LV_LAYOUT_FLEX);
+  lv_obj_set_flex_flow(lv_screen_active(), LV_FLEX_FLOW_COLUMN);
+  lv_obj_set_flex_align(lv_screen_active(), LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START);
+
   /* Create a single test label */
   lv_obj_t *test_label = lv_label_create(lv_screen_active());
   lv_label_set_text(test_label, "LVGL 9.x OK");
-  lv_obj_set_pos(test_label, 10, 10);
+
+  /* Create round scale */
+  lv_obj_t *scale_line = lv_scale_create(lv_screen_active());
+
+  lv_obj_set_size(scale_line, 100, 100);
+  lv_scale_set_mode(scale_line, LV_SCALE_MODE_ROUND_INNER);
+  lv_obj_set_style_bg_opa(scale_line, LV_OPA_COVER, 0);
+  lv_obj_set_style_bg_color(scale_line, lv_color_white(), 0);
+  lv_obj_set_style_radius(scale_line, LV_RADIUS_CIRCLE, 0);
+  lv_obj_set_style_clip_corner(scale_line, true, 0);
+  lv_obj_align(scale_line, LV_ALIGN_LEFT_MID, LV_PCT(2), 0);
+
+  lv_scale_set_label_show(scale_line, true);
+
+  lv_scale_set_total_tick_count(scale_line, 31);
+  lv_scale_set_major_tick_every(scale_line, 5);
+
+  lv_obj_set_style_length(scale_line, 5, LV_PART_ITEMS);
+  lv_obj_set_style_length(scale_line, 10, LV_PART_INDICATOR);
+  lv_scale_set_range(scale_line, 10, 40);
+
+  lv_scale_set_angle_range(scale_line, 270);
+  lv_scale_set_rotation(scale_line, 135);
+
+  needle_line = lv_line_create(scale_line);
+
+  lv_obj_set_style_line_width(needle_line, 3, LV_PART_MAIN);
+  lv_obj_set_style_line_color(needle_line, lv_palette_darken(LV_PALETTE_RED, 3), LV_PART_MAIN);
+  lv_obj_set_style_line_rounded(needle_line, true, LV_PART_MAIN);
+
+  set_needle_line_value(scale_line, 32);
+
+  /* Try any of the demos by uncommenting one of the lines below */
+  // lv_demo_widgets();
+  // lv_demo_keypad_encoder();
+  // lv_demo_benchmark();
+  // lv_demo_stress();
 
   ESP_LOGI(TAG, "LVGL demo completed - object created successfully");
   lvgl_port_unlock();
