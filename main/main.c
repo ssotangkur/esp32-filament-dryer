@@ -10,6 +10,7 @@
 #include "esp_log.h"
 #include "startup_tests.h"
 #include "display.h"
+#include "ui/ui.h"
 #include "diagnostic.h"
 #include "wifi.h"
 #include "ota.h"
@@ -55,6 +56,6 @@ void app_main(void)
     // Start FPS monitoring
     fps_monitor_start();
 
-    // Initialize and start LVGL demo
-    lvgl_demo();
+    // Initialize and start UI
+    init_ui();
 }

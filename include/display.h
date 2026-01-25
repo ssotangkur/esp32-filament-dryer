@@ -6,7 +6,6 @@ extern "C"
 #endif
 
   void init_display(void);
-  void lvgl_demo(void);
 
   // FPS monitoring functions
   void fps_monitor_start(void);
