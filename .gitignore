@@ -8,6 +8,7 @@ docker_tests/unit_tests/build/
 *.elf
 *.map
 *.bin
+.cache/
 
 # Generated test files
 docker_tests/unit_tests/mocks/

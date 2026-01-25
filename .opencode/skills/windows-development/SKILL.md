@@ -1,6 +1,11 @@
-# Windows Environment Rules
+---
+name: windows-development
+description: Windows 11 development environment and PowerShell command usage
+---
 
-## Operating System: Windows 11
+## Windows Environment Rules
+
+### Operating System: Windows 11
 
 This project is developed on Windows 11 with Visual Studio Code as the primary IDE.
 
