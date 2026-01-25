@@ -1,5 +1,6 @@
 #include <sdkconfig.h>
 #include "lvgl.h"
+#include "analog_dial.h"
 
 struct analog_dial_t
 {
@@ -19,14 +20,7 @@ void set_analog_dial_value(struct analog_dial_t *dial, int32_t value)
 }
 
 struct analog_dial_t *create_analog_dial(
-    lv_obj_t *parent,
-    int dial_diameter,
-    int container_width,
-    int container_height,
-    int vert_shift,
-    int angle_range,
-    int range_start,
-    int range_end)
+    lv_obj_t *parent)
 {
   /* Dial is bigger that the window it occupies so we need to wrap it
     in a container and use padding to shift it to the right location.
@@ -62,11 +56,11 @@ struct analog_dial_t *create_analog_dial(
   int32_t minor_tick_width = 1;
 
   /* Calculate padding values */
-  int d2 = dial_diameter / 2;
-  int c2 = container_height / 2;
-  int horiz_padding = (container_width - dial_diameter) / 2;
-  int top_padding = d2 + vert_shift - c2;
-  int bottom_padding = d2 - vert_shift - c2;
+  int d2 = ANALOG_DIAL_DIAMETER / 2;
+  int c2 = ANALOG_DIAL_CONTAINER_HEIGHT / 2;
+  int horiz_padding = (ANALOG_DIAL_CONTAINER_WIDTH - ANALOG_DIAL_DIAMETER) / 2;
+  int top_padding = d2 + ANALOG_DIAL_VERT_SHIFT - c2;
+  int bottom_padding = d2 - ANALOG_DIAL_VERT_SHIFT - c2;
 
   struct analog_dial_t *dial = malloc(sizeof(struct analog_dial_t));
 
@@ -78,7 +72,7 @@ struct analog_dial_t *create_analog_dial(
   lv_obj_set_style_pad_left(container, horiz_padding, LV_PART_MAIN);
   lv_obj_set_style_pad_right(container, horiz_padding, LV_PART_MAIN);
   lv_obj_set_style_pad_bottom(container, bottom_padding, LV_PART_MAIN);
-  lv_obj_set_size(container, container_width, container_height);
+  lv_obj_set_size(container, ANALOG_DIAL_CONTAINER_WIDTH, ANALOG_DIAL_CONTAINER_HEIGHT);
   lv_obj_set_style_radius(container, 0, LV_PART_MAIN);
   lv_obj_set_style_border_width(container, 0, LV_PART_MAIN);
   /* Remove scrollbar */
@@ -88,7 +82,7 @@ struct analog_dial_t *create_analog_dial(
   lv_obj_t *scale_line = lv_scale_create(container);
   dial->scale = scale_line;
 
-  lv_obj_set_size(scale_line, dial_diameter, dial_diameter);
+  lv_obj_set_size(scale_line, ANALOG_DIAL_DIAMETER, ANALOG_DIAL_DIAMETER);
   lv_obj_set_style_radius(scale_line, 0, LV_PART_MAIN);
   lv_obj_set_style_border_width(scale_line, 0, LV_PART_MAIN);
   lv_obj_set_style_margin_all(scale_line, 0, LV_PART_MAIN);
@@ -118,10 +112,10 @@ struct analog_dial_t *create_analog_dial(
   /* Rotate labels to match tick angle */
   // lv_obj_set_style_transform_rotation(scale_line, LV_SCALE_LABEL_ROTATE_MATCH_TICKS + 900, LV_PART_INDICATOR);
 
-  lv_scale_set_range(scale_line, range_start, range_end);
+  lv_scale_set_range(scale_line, ANALOG_DIAL_RANGE_START, ANALOG_DIAL_RANGE_END);
 
-  lv_scale_set_angle_range(scale_line, angle_range);
-  lv_scale_set_rotation(scale_line, 180 + (180 - angle_range) / 2);
+  lv_scale_set_angle_range(scale_line, ANALOG_DIAL_ANGLE_RANGE);
+  lv_scale_set_rotation(scale_line, 180 + (180 - ANALOG_DIAL_ANGLE_RANGE) / 2);
 
   lv_obj_t *needle_line = lv_line_create(scale_line);
   dial->needle_line = needle_line;

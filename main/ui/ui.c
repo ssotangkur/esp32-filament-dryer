@@ -17,6 +17,7 @@
 #include "wifi.h"
 #include "version.h"
 #include "ui.h"
+#include "analog_dial.h"
 
 static lv_obj_t *needle_line;
 
@@ -75,6 +76,9 @@ void init_ui(void)
     lv_obj_set_style_line_rounded(needle_line, true, LV_PART_MAIN);
 
     set_needle_line_value(scale_line, 32);
+
+    struct analog_dial_t *dial = create_analog_dial(lv_screen_active());
+    set_analog_dial_value(dial, 75);
 
     /* Try any of the demos by uncommenting one of the lines below */
     // lv_demo_widgets();
