@@ -2,7 +2,6 @@
 
 #include <sdkconfig.h>
 #include "lvgl.h"
-#include <stdlib.h>
 
 #ifdef __cplusplus
 extern "C"
@@ -12,7 +11,7 @@ extern "C"
     /**
      * Opaque structure representing an analog dial
      */
-    typedef struct analog_dial_t analog_dial_t;
+    typedef struct analog_dial_t;
 
 /* Analog dial constants */
 #define ANALOG_DIAL_DIAMETER 210

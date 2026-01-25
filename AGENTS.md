@@ -120,3 +120,4 @@ When working on specific tasks, consider loading these skills for detailed proce
 - For ESP-IDF command details: `skill({ name: "esp-idf-workflow" })`
 - For testing patterns: `skill({ name: "esp32-testing-patterns" })`
 - For Windows development: `skill({ name: "windows-development" })`
+- For subagent creation: `skill({ name: "subagent-creation" })`
