@@ -1,5 +1,4 @@
-#ifndef FREERTOS_SEMPHR_H
-#define FREERTOS_SEMPHR_H
+#pragma once
 
 // Include basic FreeRTOS types
 #include "FreeRTOS.h"
@@ -21,5 +20,3 @@ QueueHandle_t xQueueCreate(uint32_t uxQueueLength, uint32_t uxItemSize);
 int xQueueSend(QueueHandle_t xQueue, const void *pvItemToQueue, uint32_t xTicksToWait);
 int xQueueReceive(QueueHandle_t xQueue, void *pvBuffer, uint32_t xTicksToWait);
 void vQueueDelete(QueueHandle_t xQueue);
-
-#endif // FREERTOS_SEMPHR_H

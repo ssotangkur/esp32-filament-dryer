@@ -1,5 +1,4 @@
-#ifndef HEATER_H
-#define HEATER_H
+#pragma once
 
 #include <stdint.h>
 
@@ -11,5 +10,3 @@ void heater_init(void);
  * @param power Power level from 0 (off) to 255 (max).
  */
 void set_heat_power(uint8_t power);
-
-#endif // HEATER_H

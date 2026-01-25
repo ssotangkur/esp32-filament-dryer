@@ -1,5 +1,4 @@
-#ifndef FREERTOS_TASK_H
-#define FREERTOS_TASK_H
+#pragma once
 
 // Include basic FreeRTOS types
 #include "FreeRTOS.h"
@@ -27,5 +26,3 @@ TickType_t xTaskGetTickCount(void);
 // Task priority definitions
 #define tskIDLE_PRIORITY 0
 #define configMAX_PRIORITIES 25
-
-#endif // FREERTOS_TASK_H

@@ -1,5 +1,4 @@
-#ifndef VERSION_H
-#define VERSION_H
+#pragma once
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -40,5 +39,3 @@ firmware_info_t get_firmware_info(void);
 bool is_version_newer(const char *current_version, const char *remote_version);
 int compare_versions(const char *version1, const char *version2);
 firmware_version_t parse_version_string(const char *version_str);
-
-#endif // VERSION_H

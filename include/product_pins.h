@@ -1,3 +1,5 @@
+#pragma once
+
 #define BOARD_NONE_PIN (-1)
 
 #define BOARD_POWERON (gpio_num_t)(15)

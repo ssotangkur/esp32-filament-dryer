@@ -1,5 +1,4 @@
-#ifndef ESP_LOG_H
-#define ESP_LOG_H
+#pragma once
 
 #include <stdio.h>
 #include <stdarg.h>
@@ -32,5 +31,3 @@ static inline void esp_log_printf(const char *level, const char *tag, const char
 
 // ESP-IDF error to name function
 const char *esp_err_to_name(int code);
-
-#endif // ESP_LOG_H

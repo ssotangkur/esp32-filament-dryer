@@ -1,5 +1,4 @@
-#ifndef FREERTOS_H
-#define FREERTOS_H
+#pragma once
 
 // Minimal FreeRTOS types and definitions for testing
 #include <stdint.h>
@@ -38,5 +37,3 @@ typedef void (*TaskFunction_t)(void *);
 // Task priorities
 #define tskIDLE_PRIORITY 0
 #define configMAX_PRIORITIES 25
-
-#endif // FREERTOS_H

@@ -1,5 +1,4 @@
-#ifndef SYSMON_WRAPPER_H
-#define SYSMON_WRAPPER_H
+#pragma once
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -51,5 +50,3 @@ BaseType_t sysmon_xTaskCreatePinnedToCore(
     UBaseType_t uxPriority,
     TaskHandle_t *const pxCreatedTask,
     const BaseType_t xCoreID);
-
-#endif // SYSMON_WRAPPER_H

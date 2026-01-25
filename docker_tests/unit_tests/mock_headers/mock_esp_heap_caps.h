@@ -1,5 +1,4 @@
-#ifndef MOCK_ESP_HEAP_CAPS_H
-#define MOCK_ESP_HEAP_CAPS_H
+#pragma once
 
 #include <stddef.h>
 #include <stdint.h>
@@ -10,5 +9,3 @@
 // Mock heap functions (will be mocked by CMock)
 void *heap_caps_malloc(size_t size, uint32_t caps);
 void heap_caps_free(void *ptr);
-
-#endif // MOCK_ESP_HEAP_CAPS_H

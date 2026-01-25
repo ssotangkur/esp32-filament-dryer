@@ -1,5 +1,4 @@
-#ifndef DIAGNOSTIC_H
-#define DIAGNOSTIC_H
+#pragma once
 
 #ifdef __cplusplus
 extern "C"
@@ -19,5 +18,3 @@ extern "C"
 #ifdef __cplusplus
 }
 #endif
-
-#endif // DIAGNOSTIC_H

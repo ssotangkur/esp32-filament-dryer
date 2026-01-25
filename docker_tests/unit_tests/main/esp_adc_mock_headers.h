@@ -3,8 +3,7 @@
  * This file contains simplified declarations of ADC functions that will be mocked by CMock
  */
 
-#ifndef ESP_ADC_MOCK_HEADERS_H
-#define ESP_ADC_MOCK_HEADERS_H
+#pragma once
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -95,5 +94,3 @@ void adc_cali_delete_scheme_curve_fitting(adc_cali_handle_t handle);
 
 // Utility functions
 const char *esp_err_to_name(esp_err_t code);
-
-#endif // ESP_ADC_MOCK_HEADERS_H

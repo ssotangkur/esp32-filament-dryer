@@ -1,5 +1,4 @@
-#ifndef TEMP_H
-#define TEMP_H
+#pragma once
 
 #include <stddef.h>
 #include <stdbool.h>
@@ -184,5 +183,3 @@ extern "C"
 #ifdef __cplusplus
 }
 #endif
-
-#endif // TEMP_H

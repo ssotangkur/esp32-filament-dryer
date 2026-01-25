@@ -1,7 +1,4 @@
-#ifndef ESP_ADC_ADC_CALI_H
-#define ESP_ADC_ADC_CALI_H
+#pragma once
 
 // Include the main ADC mock header
 #include "../../main/esp_adc_mock_headers.h"
-
-#endif // ESP_ADC_ADC_CALI_H

@@ -1,5 +1,4 @@
-#ifndef CIRCULAR_BUFFER_H
-#define CIRCULAR_BUFFER_H
+#pragma once
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -86,5 +85,3 @@ void circular_buffer_clear(circular_buffer_t *cb);
  * @param cb Pointer to circular_buffer_t structure
  */
 void circular_buffer_free(circular_buffer_t *cb);
-
-#endif // CIRCULAR_BUFFER_H

@@ -1,5 +1,4 @@
-#ifndef HEATER_CONTROLLER_H
-#define HEATER_CONTROLLER_H
+#pragma once
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -72,5 +71,3 @@ void controller_set_active(bool active);
  * @param air_temp The current air temperature.
  */
 void controller_run(float heater_temp, float air_temp);
-
-#endif // HEATER_CONTROLLER_H

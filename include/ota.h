@@ -1,5 +1,4 @@
-#ifndef OTA_H
-#define OTA_H
+#pragma once
 
 #include "esp_err.h"
 #include <stdbool.h>
@@ -81,5 +80,3 @@ bool ota_check_for_update(const char *ota_url);
  * @return Progress percentage, or -1 if no update in progress
  */
 int ota_get_progress(void);
-
-#endif // OTA_H

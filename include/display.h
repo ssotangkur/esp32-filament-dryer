@@ -1,5 +1,4 @@
-#ifndef DISPLAY_H
-#define DISPLAY_H
+#pragma once
 
 #ifdef __cplusplus
 extern "C"
@@ -18,5 +17,3 @@ extern "C"
 #ifdef __cplusplus
 }
 #endif
-
-#endif // DISPLAY_H

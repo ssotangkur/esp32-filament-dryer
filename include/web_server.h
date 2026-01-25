@@ -1,5 +1,4 @@
-#ifndef WEB_SERVER_H
-#define WEB_SERVER_H
+#pragma once
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -21,5 +20,3 @@ bool custom_uri_match(const char *reference_uri, const char *uri_to_match, size_
 esp_err_t version_handler(httpd_req_t *req);
 esp_err_t static_file_handler(httpd_req_t *req);
 esp_err_t sensor_data_handler(httpd_req_t *req);
-
-#endif // WEB_SERVER_H
