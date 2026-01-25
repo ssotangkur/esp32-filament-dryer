@@ -1,198 +1,84 @@
 ---
 name: subagent-creation
-description: Patterns and best practices for creating specialized subagents in the OpenCode system
+description: How to create and configure subagents in OpenCode using the proper markdown format
 ---
 
-## Subagent Creation Framework
+## Subagent Creation in OpenCode
 
-### Definition of Subagents in OpenCode
+### Understanding Subagents
 
-In the OpenCode system, subagents are specialized autonomous entities that can be launched via the `task` tool to handle specific types of complex, multi-step operations. Unlike skills which provide static knowledge, subagents are dynamic agents that execute tasks and can make autonomous decisions within their domain.
+Subagents in OpenCode are specialized assistants that primary agents can invoke for specific tasks. They can be invoked:
+- Automatically by primary agents for specialized tasks based on their descriptions
+- Manually by @ mentioning a subagent in your message (e.g., @general help me search for this function)
 
-The primary subagent types available in OpenCode are:
-- **general**: General-purpose agent for researching complex questions and executing multi-step tasks
-- **explore**: Fast agent specialized for exploring codebases and answering questions about the codebase
+OpenCode comes with two built-in subagents:
+- **General**: A general-purpose agent for researching complex questions and executing multi-step tasks. Has full tool access (except todo), so it can make file changes when needed.
+- **Explore**: A fast, read-only agent for exploring codebases. Cannot modify files.
 
-### Subagent Creation Patterns
+### Creating Custom Subagents
 
-#### 1. Hierarchical Decomposition Pattern
-Break complex tasks into smaller, manageable subtasks handled by specialized subagents:
-```javascript
-task(subagent_type="explore", prompt="Explore the codebase to identify all functions related to temperature control")
-task(subagent_type="general", prompt="Implement unit tests for the temperature control functions identified")
+To create a new subagent, create a markdown file in `.opencode/agents/` with the following format:
+
+```markdown
+---
+description: Brief description of what the agent does
+mode: subagent
+model: optional model override (e.g., anthropic/claude-3-5-sonnet-20241022)
+tools:
+  bash: true/false
+  read: true/false
+  write: true/false
+  edit: true/false
+  grep: true/false
+  glob: true/false
+  webfetch: true/false
+permission:
+  bash:
+    "git*": allow    # Allow git commands
+    "*": ask        # Ask for approval for all other bash commands
+---
+System prompt that defines the agent's behavior and responsibilities.
 ```
 
-#### 2. Specialized Functional Pattern
-Create subagents for specific functional areas:
-- **Code Analysis Agent**: For examining code structure and identifying patterns
-- **Research Agent**: For investigating best practices and solutions
-- **Implementation Agent**: For writing code based on research findings
-- **Testing Agent**: For creating and running tests
+### Example Subagent Configuration
 
-#### 3. Domain-Specific Pattern
-Develop subagents focused on specific domains within the project:
-- **ESP-IDF Agent**: Specialized for ESP-IDF command usage and environment setup
-- **Testing Agent**: Focused on unit testing patterns and CMock integration
-- **UI Agent**: Specialized for display and user interface functionality
+To create a git commit assistant subagent, create `.opencode/agents/git_commit_assistant.md`:
 
-### Best Practices for Subagent Design
+```markdown
+---
+description: Automates the git commit process by analyzing changes, generating appropriate commit messages following project conventions, and executing the commit with proper validation.
+mode: subagent
+model: anthropic/claude-3-5-sonnet-20241022
+tools:
+  bash: true
+  read: true
+  grep: true
+permission:
+  bash:
+    "git*": allow
+    "*": ask
+---
+You are a git commit specialist. Your role is to automate the git commit process by:
 
-#### 1. Clear Objective Definition
-Each subagent should have a well-defined purpose and scope:
-- Specify the exact task the subagent should accomplish
-- Define expected deliverables and outcomes
-- Limit scope to prevent over-complexity
-
-#### 2. Appropriate Agent Type Selection
-Choose the right agent type for the task:
-- Use **explore** for research, codebase exploration, and pattern identification
-- Use **general** for complex multi-step tasks requiring reasoning and execution
-
-#### 3. Effective Prompt Engineering
-Craft prompts that provide sufficient context while being specific:
-- Include relevant project context and constraints
-- Specify desired output format
-- Reference relevant skills or knowledge bases when applicable
-
-#### 4. Resource Management
-Consider the computational resources and time requirements:
-- Estimate complexity and processing time
-- Plan for potential iterations and refinement
-- Monitor subagent execution and results
-
-### Template for Subagent Definition
-
-When creating a new subagent approach, follow this template:
-
-```
-## Subagent Name: [Descriptive name]
-
-### Purpose
-[Clear statement of what the subagent accomplishes]
-
-### Input Requirements
-[What information the subagent needs to start]
-
-### Process Steps
-[High-level steps the subagent will perform]
-
-### Expected Output
-[What the subagent should produce]
-
-### Agent Type Recommendation
-[Which subagent_type to use: explore or general]
-
-### Example Usage
-[Concrete example of how to invoke the subagent]
+1. Running `git status` to identify staged files and modified files
+2. If staged files exist AND no modified files have the same names → commit only staged files
+3. If any file appears as both staged and modified → prompt parent agent for user decision
+4. If no staged files exist → proceed with committing all changes
+5. Analyze changes in selected files to understand the nature of modifications
+6. Generate hierarchical commit message with intent and specific changes
+7. Validate commit message and execute commit with proper error handling
 ```
 
-### Creating the Actual Subagent File
+### Key Configuration Options
 
-After defining your subagent using the template above, create an actual JSON file for the subagent in the `.opencode/subagents/` directory. The file should have the following structure:
+- **description** (required): A brief description of what the agent does
+- **mode**: Must be `subagent` for subagents
+- **model**: Optional model override
+- **tools**: Define which tools the agent can access
+- **permission**: Configure granular permissions for specific commands
 
-```json
-{
-  "name": "[subagent-name]",
-  "purpose": "[Purpose statement from template]",
-  "input_requirements": [
-    "[Input requirement 1]",
-    "[Input requirement 2]"
-  ],
-  "process_steps": [
-    "[Process step 1]",
-    "[Process step 2]"
-  ],
-  "expected_output": [
-    "[Expected output 1]",
-    "[Expected output 2]"
-  ],
-  "agent_type_recommendation": "[general or explore]",
-  "example_usage": "[Example usage from template]"
-}
-```
+### Invoking Subagents
 
-Name the file `[subagent-name].json` (e.g., `git_commit_assistant.json`) and place it in the `.opencode/subagents/` directory.
-
-### Coordination Protocols
-
-#### Sequential Execution
-For dependent tasks where one subagent's output feeds another:
-```javascript
-result = task(subagent_type="explore", prompt="Find all temperature sensor functions")
-task(subagent_type="general", prompt=`Create tests for these functions: ${result}`)
-```
-
-#### Parallel Execution
-For independent tasks that can run simultaneously:
-```javascript
-// Run multiple explore tasks in parallel to research different aspects
-code_analysis = task(subagent_type="explore", prompt="Analyze main/temperature_control.c")
-test_review = task(subagent_type="explore", prompt="Review existing tests for temperature control")
-// Both results can be used together later
-```
-
-#### Result Integration
-Plan how subagent results will be combined or used:
-- Store intermediate results for later use
-- Combine findings from multiple subagents
-- Validate results before proceeding
-
-### Error Handling and Fallbacks
-
-#### Common Subagent Issues
-- **Timeout**: Complex tasks may exceed time limits
-- **Scope Creep**: Subagents may attempt overly broad tasks
-- **Inconsistent Results**: Different subagents may produce conflicting information
-
-#### Mitigation Strategies
-- Define clear stopping conditions for subagents
-- Set appropriate complexity bounds
-- Validate subagent outputs before use
-- Prepare fallback approaches if subagent fails
-
-### Examples of Effective Subagent Usage
-
-#### Example 1: Codebase Exploration Task
-```javascript
-task(subagent_type="explore", 
-     prompt="Explore the ESP32 filament dryer codebase to identify all temperature-related functions and their relationships. Focus on files in main/ and include/ directories.")
-```
-
-#### Example 2: Multi-Step Implementation Task
-```javascript
-// First, analyze current implementation
-analysis = task(subagent_type="explore", 
-                prompt="Examine the current heater control implementation in main/heater.c and identify potential improvements based on ESP-IDF best practices.")
-
-// Then, implement suggested changes
-task(subagent_type="general", 
-     prompt=`Implement the improvements suggested in this analysis: ${analysis}. Follow the code style guidelines in AGENTS.md.`)
-```
-
-### Common Anti-Patterns to Avoid
-
-#### 1. Over-Delegation
-Avoid creating subagents for simple tasks that can be handled directly by the main agent.
-
-#### 2. Circular Dependencies
-Ensure subagents don't create circular execution patterns where each waits for the other.
-
-#### 3. Unnecessary Complexity
-Don't create multiple subagents when a single subagent or direct action would suffice.
-
-### Subagent Lifecycle Management
-
-#### Initiation
-- Clearly define the subagent's goal
-- Provide necessary context and constraints
-- Select appropriate subagent type
-
-#### Monitoring
-- Track subagent progress when possible
-- Prepare for potential failures
-- Plan for result integration
-
-#### Completion
-- Validate subagent outputs
-- Integrate results appropriately
-- Clean up any temporary artifacts
+Subagents can be invoked in two ways:
+1. Manually with @ mentions: `@git_commit_assistant please commit these changes`
+2. Programmatically by primary agents when they recognize the subagent's expertise matches the current task
