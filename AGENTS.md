@@ -108,10 +108,11 @@ NEVER commit changes automatically without explicit user approval.
 Always wait for explicit "commit", "yes", "go ahead", "commit now", or "please commit" before running `git commit`.
 This rule is critical and must always be followed.
 
-When committing changes, prefer using the git commit assistant subagent:
-- Use "@git_commit_assistant please commit these changes" to automatically analyze and commit changes
-- The subagent will follow project conventions and create appropriate commit messages
-- The subagent handles staged vs modified files appropriately
+When committing changes, you MUST use the git commit assistant subagent:
+ - Use "@git_commit_assistant please commit these changes" to automatically analyze and commit changes
+ - The subagent will follow project conventions and create appropriate commit messages
+ - The subagent handles staged vs modified files appropriately
+ - Manual commits using `git commit` directly are prohibited except in emergency situations
 
 ## Testing Framework
 This project uses Docker-based unit testing with CMock:
@@ -129,4 +130,4 @@ When working on specific tasks, consider loading these skills for detailed proce
 
 ## Subagents
 This project includes specialized subagents for common tasks:
-- For git commits: `@git_commit_assistant please commit these changes` - analyzes changes and creates appropriate commit messages following project conventions
+- For git commits: `@git_commit_assistant please commit these changes` - analyzes changes and creates appropriate commit messages following project conventions (REQUIRED for all commits)
