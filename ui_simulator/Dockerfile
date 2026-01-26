@@ -18,16 +18,16 @@ COPY managed_components/ ./managed_components/
 COPY main/ ./main/
 COPY include/ ./include/
 COPY ui_simulator/ ./ui_simulator/
-COPY shell.html ./shell.html
+COPY ui_simulator/lv_conf.h ./lv_conf.h
+COPY ui_simulator/lv_conf.h ./ui_simulator/lv_conf.h
+COPY sdkconfig.h ./sdkconfig.h
+COPY ui_simulator/shell.html ./shell.html
 
-# Create lv_conf.h using the generate script approach from LVGL codespace
-RUN touch lv_conf.h && \
-  python3 managed_components/lvgl__lvgl/scripts/generate_lv_conf.py \
-  --template managed_components/lvgl__lvgl/lv_conf_template.h \
-  --config lv_conf.h
+# Copy the existing lv_conf.h file to the project root
+# The lv_conf.h file has already been configured for the project
 
 # Set the working directory to ui_simulator for the build
 WORKDIR /project/ui_simulator
 
 # Command to run the build when container is started
-CMD ["bash", "-c", "mkdir -p build && emcmake cmake . -B build -DCMAKE_BUILD_TYPE=Release && emmake make -C build -j4 && echo 'Build completed successfully!'"]
+CMD ["bash", "-c", "cd /emsdk && . ./emsdk_env.sh && cd /project/ui_simulator && mkdir -p build && emcmake cmake . -B build && emmake make -C build -j4 && echo 'Build completed successfully! Find the output in ui_simulator/build/'"]

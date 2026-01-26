@@ -7,11 +7,3 @@ services:
       dockerfile: ui_simulator/Dockerfile
     volumes:
       - ./build:/project/ui_simulator/build
-    working_dir: /project/ui_simulator
-    command: >
-      bash -c "
-        mkdir -p build &&
-        emcmake cmake . -B build -DCMAKE_BUILD_TYPE=Release &&
-        emmake make -C build -j4 &&
-        echo 'Build completed successfully! Find the output in ui_simulator/build/'
-      "

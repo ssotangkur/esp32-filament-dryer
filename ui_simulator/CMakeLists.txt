@@ -1,57 +1,42 @@
 # CMakeLists.txt for UI Simulator
 # This file configures the build for the UI simulator using Emscripten
 
-cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 3.12)
+project (ui_simulator)
 
-# Project name
-project(ui_simulator)
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O2 -s USE_SDL=2")
 
-# Set C standard
-set(CMAKE_C_STANDARD 11)
-
-# Include directories
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/..)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../managed_components/lvgl__lvgl)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../managed_components/lvgl__lvgl/src)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../managed_components/lvgl__lvgl/examples)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../managed_components/lvgl__lvgl/demos)
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../main/ui)
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../include)
-# Add the project root directory to include the generated lv_conf.h
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/..)
 
-# Define build flag for simulator
-add_definitions(-DBUILD_FOR_SIMULATOR)
+# Add LVGL subdirectory to build it
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../managed_components/lvgl__lvgl lvgl)
 
-# Define source files
-set(SOURCES
-    src/main.c
-    src/ui_stub.c
+# Define source files - include both the simulator files and our UI files
+file(GLOB MY_SOURCES "./src/*.c")
+set(SOURCES ${MY_SOURCES})
+
+# Define BUILD_FOR_SIMULATOR for all source files
+add_compile_definitions(BUILD_FOR_SIMULATOR=1)
+
+add_executable(index ${SOURCES} ${INCLUDES})
+
+# Use our filament dryer UI initialization
+set(LVGL_CHOSEN_DEMO init_ui)
+set_source_files_properties(src/main.c PROPERTIES COMPILE_FLAGS -DCHOSEN_DEMO=${LVGL_CHOSEN_DEMO})
+
+# Set executable suffix to html
+set(CMAKE_EXECUTABLE_SUFFIX ".html")
+
+target_link_libraries(index
+    lvgl
+    lvgl_examples
+    lvgl_demos
+    lvgl_thorvg
+    SDL2
 )
 
-# Add executable
-add_executable(ui_simulator ${SOURCES})
-
-# Link libraries - using lvgl directly from the managed components
-target_link_libraries(ui_simulator 
-    SDL2 
-    SDL2main
-)
-
-# Emscripten-specific settings
-if(EMSCRIPTEN)
-    # Set Emscripten-specific linker flags
-    set_target_properties(ui_simulator PROPERTIES 
-        LINK_FLAGS "--bind -s USE_SDL=2 -s ALLOW_MEMORY_GROWTH=1 -s ASYNCIFY -s MODULARIZE -s EXPORT_NAME='Module' -s ENVIRONMENT=web,shell -s NO_EXIT_RUNTIME=1 -s SUPPORT_LONGJMP=0 -s WASM=1 --shell-file ${CMAKE_CURRENT_SOURCE_DIR}/shell.html"
-    )
-    
-    # Set output name for web target
-    set_target_properties(ui_simulator PROPERTIES OUTPUT_NAME "index")
-endif()
-
-# Compiler-specific settings
-if(MSVC)
-    target_compile_options(ui_simulator PRIVATE /W4)
-else()
-    target_compile_options(ui_simulator PRIVATE -Wall -Wextra -pedantic)
-endif()
+set_target_properties(index PROPERTIES LINK_FLAGS "--shell-file ${CMAKE_CURRENT_SOURCE_DIR}/shell.html -s SINGLE_FILE=1")

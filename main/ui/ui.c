@@ -1,11 +1,26 @@
 #include <sdkconfig.h>
+
+#ifdef BUILD_FOR_SIMULATOR
+// Headers not available in simulator environment
+#include "lvgl.h"
+#include "lv_demos.h"
+#include "ui.h"
+#include "analog_dial.h"
+#else
 #include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "freertos/semphr.h"
 #include "esp_log.h"
 #include "esp_lvgl_port.h"
 #include "lvgl.h"
 #include "lv_demos.h"
 #include "ui.h"
 #include "analog_dial.h"
+#endif
+
+#ifdef BUILD_FOR_SIMULATOR
+static const char *TAG = "UI";
+#endif
 
 static lv_obj_t *needle_line;
 
@@ -17,11 +32,13 @@ static void set_needle_line_value(lv_obj_t *obj, int32_t v)
 /* Initialize user interface */
 void init_ui(void)
 {
+#ifdef BUILD_FOR_SIMULATOR
+    // No locking needed in simulator
+    printf("UI initialization started - creating minimal test objects\n");
+#else
     lvgl_port_lock(0);
-
-    // Create only a single simple label to test basic functionality
-    static const char *TAG = "UI";
     ESP_LOGI(TAG, "UI initialization started - creating minimal test objects");
+#endif
 
     /* Change the active screen's background color */
     lv_obj_set_style_bg_color(lv_screen_active(), lv_palette_darken(LV_PALETTE_GREY, 2), LV_PART_MAIN);
@@ -75,5 +92,9 @@ void init_ui(void)
     // lv_demo_stress();
 
     ESP_LOGI(TAG, "UI initialization completed - objects created successfully");
+#ifdef BUILD_FOR_SIMULATOR
+    // No unlocking needed in simulator
+#else
     lvgl_port_unlock();
+#endif
 }

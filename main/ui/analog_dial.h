@@ -8,10 +8,12 @@ extern "C"
 {
 #endif
 
-    /**
-     * Opaque structure representing an analog dial
-     */
-    typedef struct analog_dial_t;
+/**
+ * Opaque structure representing an analog dial
+ */
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /* Analog dial constants */
 #define ANALOG_DIAL_DIAMETER 210
@@ -22,28 +24,37 @@ extern "C"
 #define ANALOG_DIAL_RANGE_START 0
 #define ANALOG_DIAL_RANGE_END 120
 
-    /**
-     * Creates an analog dial widget
-     *
-     * @param parent Parent object for the dial
-     * @return Pointer to the created analog dial structure
-     */
-    analog_dial_t *create_analog_dial(lv_obj_t *parent);
+#ifndef ANALOG_DIAL_TYPEDEF_DONE
+#define ANALOG_DIAL_TYPEDEF_DONE
+typedef struct analog_dial_t;
+#endif
 
-    /**
-     * Sets the value of an analog dial
-     *
-     * @param dial Pointer to the analog dial structure
-     * @param value Value to set
-     */
-    void set_analog_dial_value(analog_dial_t *dial, int32_t value);
+/**
+ * Creates an analog dial widget
+ *
+ * @param parent Parent object for the dial
+ * @return Pointer to the created analog dial structure
+ */
+struct analog_dial_t *create_analog_dial(lv_obj_t *parent);
 
-    /**
-     * Frees the memory allocated for an analog dial
-     *
-     * @param dial Pointer to the analog dial structure to free
-     */
-    void free_analog_dial(analog_dial_t *dial);
+/**
+ * Sets the value of an analog dial
+ *
+ * @param dial Pointer to the analog dial structure
+ * @param value Value to set
+ */
+void set_analog_dial_value(struct analog_dial_t *dial, int32_t value);
+
+/**
+ * Frees the memory allocated for an analog dial
+ *
+ * @param dial Pointer to the analog dial structure to free
+ */
+void free_analog_dial(struct analog_dial_t *dial);
+
+#ifdef __cplusplus
+} /*extern "C"*/
+#endif
 
 #ifdef __cplusplus
 }
