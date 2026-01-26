@@ -1,6 +1,5 @@
 #pragma once
 
-#include <sdkconfig.h>
 #include "lvgl.h"
 
 #ifdef __cplusplus

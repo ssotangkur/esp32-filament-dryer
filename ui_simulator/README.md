@@ -27,61 +27,6 @@ The Docker approach eliminates the need to install Emscripten locally by running
 .\ui_simulator\build_docker.bat
 ```
 
-### Alternative: Manual Build (Requires Local Emscripten Installation)
-
-If you prefer to build locally without Docker, you'll need to install Emscripten manually:
-
-#### Installing Emscripten
-
-Unlike other dependencies like LVGL, Emscripten cannot be installed as a simple project dependency because it's a complete toolchain that needs to be installed at the system level. You'll need to install it separately on your system:
-
-##### On Windows:
-1. Download the Emscripten SDK from: https://github.com/emscripten-core/emsdk
-2. Extract it to a directory (e.g., `C:\emsdk`)
-3. Open Command Prompt and run:
-   ```cmd
-   cd C:\emsdk
-   git pull
-   emsdk install latest
-   emsdk activate latest
-   emsdk_env.bat
-   ```
-4. You may want to add the emsdk environment permanently by running:
-   ```cmd
-   emsdk construct_env
-   ```
-
-##### On Linux/Mac:
-1. Clone the Emscripten SDK:
-   ```bash
-   git clone https://github.com/emscripten-core/emsdk.git
-   cd emsdk
-   ```
-2. Install and activate the latest version:
-   ```bash
-   ./emsdk install latest
-   ./emsdk activate latest
-   source ./emsdk_env.sh
-   ```
-3. To permanently add to your shell, add this to your `.bashrc` or `.zshrc`:
-   ```bash
-   source "/path/to/emsdk/emsdk_env.sh"
-   ```
-
-#### Building with Manual Installation:
-
-##### On Linux/Mac:
-```bash
-# From project root
-./ui_simulator/build_sim.sh
-```
-
-##### On Windows:
-```cmd
-# From project root
-.\ui_simulator\build_sim.bat
-```
-
 ## Running the Simulator
 
 After building, open `ui_simulator/build/index.html` in a web browser to run the simulator.

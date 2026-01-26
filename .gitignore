@@ -1,5 +1,6 @@
 # Build artifacts
 build/
+build_cache/
 build-*/
 docker_tests/unit_tests/build/
 *.d

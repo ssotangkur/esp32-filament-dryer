@@ -12,8 +12,9 @@
 #include <SDL2/SDL.h>
 #include <emscripten.h>
 #include "lvgl.h"
-#include "demos/lv_demos.h"
-#include "examples/lv_examples.h"
+// #include "demos/lv_demos.h"
+// #include "examples/lv_examples.h"
+#include "ui/ui.h"
 
 /*********************
  *      DEFINES
@@ -42,8 +43,8 @@ static void memory_monitor(lv_timer_t *param);
  **********************/
 static lv_display_t *disp1;
 
-int monitor_hor_res = 320; /* Set to our T-Display S3 width */
-int monitor_ver_res = 170; /* Set to our T-Display S3 height */
+int monitor_hor_res = 170; /* Set to our T-Display S3 width */
+int monitor_ver_res = 320; /* Set to our T-Display S3 height */
 
 /**********************
  *      MACROS
@@ -69,7 +70,7 @@ int main(int argc, char **argv)
   /*Initialize the HAL (display, input devices, tick) for LittlevGL*/
   hal_init();
 
-  lv_demo_widgets();
+  init_ui();
 
   emscripten_set_main_loop_arg(do_loop, NULL, -1, true);
 }

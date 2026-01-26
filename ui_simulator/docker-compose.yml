@@ -6,4 +6,9 @@ services:
       context: ..
       dockerfile: ui_simulator/Dockerfile
     volumes:
-      - ./build:/project/ui_simulator/build
+      - ./build:/project/build
+      - ./build_cache:/emsdk/upstream/emscripten/cache
+      - ../managed_components:/project/managed_components:ro
+      - ../main:/project/main:ro
+      - ../include:/project/include:ro
+      - ./docker_root:/project/ui_simulator:ro

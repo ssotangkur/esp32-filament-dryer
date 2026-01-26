@@ -1,11 +1,13 @@
-#include <sdkconfig.h>
+// #include <sdkconfig.h>
 
 #ifdef BUILD_FOR_SIMULATOR
 // Headers not available in simulator environment
+#include <stdio.h>
 #include "lvgl.h"
 #include "lv_demos.h"
-#include "ui.h"
-#include "analog_dial.h"
+#include "ui/ui.h"
+#include "ui/analog_dial.h"
+#include "esp_log.h"
 #else
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -14,8 +16,8 @@
 #include "esp_lvgl_port.h"
 #include "lvgl.h"
 #include "lv_demos.h"
-#include "ui.h"
-#include "analog_dial.h"
+#include "ui/ui.h"
+#include "ui/analog_dial.h"
 #endif
 
 #ifdef BUILD_FOR_SIMULATOR

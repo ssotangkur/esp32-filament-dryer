@@ -47,8 +47,8 @@
 
 	<script>
 		var siteURL = new URL(window.location.href);
-		var w = siteURL.searchParams.get("w") || "320";
-		var h = siteURL.searchParams.get("h") || "170";
+		var w = siteURL.searchParams.get("w") || "170";
+		var h = siteURL.searchParams.get("h") || "320";
 		var canvas = document.getElementById('canvas');
 		canvas.setAttribute("width", w);
 		canvas.setAttribute("height", h);
@@ -63,7 +63,7 @@
 			canvas: (function () {
 				return canvas;
 			})(),
-			arguments: [siteURL.searchParams.get("w") || "320", siteURL.searchParams.get("h") || "170", siteURL.searchParams.get("example") ?? "default"]
+			arguments: [siteURL.searchParams.get("w") || "170", siteURL.searchParams.get("h") || "320", siteURL.searchParams.get("example") ?? "default"]
 		};
 		if (typeof window.git_hash != 'undefined') {
 			var gitHashDiv = document.querySelector("#git-hash");

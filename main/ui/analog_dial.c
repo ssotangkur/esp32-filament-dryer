@@ -1,6 +1,5 @@
-#include <sdkconfig.h>
 #include "lvgl.h"
-#include "analog_dial.h"
+#include "ui/analog_dial.h"
 #include <stdlib.h>
 
 struct analog_dial_t

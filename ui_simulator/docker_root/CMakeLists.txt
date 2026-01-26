@@ -11,13 +11,15 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../managed_components/lvgl__lvgl
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../managed_components/lvgl__lvgl/src)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../managed_components/lvgl__lvgl/examples)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../managed_components/lvgl__lvgl/demos)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../include)
 
 # Add LVGL subdirectory to build it
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../managed_components/lvgl__lvgl lvgl)
 
 # Define source files - include both the simulator files and our UI files
-file(GLOB MY_SOURCES "./src/*.c")
-set(SOURCES ${MY_SOURCES})
+file(GLOB_RECURSE MY_SOURCES "/project/ui_simulator/src/*.c")
+file(GLOB_RECURSE UI_SOURCES "/project/main/ui/*.c")
+set(SOURCES ${MY_SOURCES} ${UI_SOURCES})
 
 # Define BUILD_FOR_SIMULATOR for all source files
 add_compile_definitions(BUILD_FOR_SIMULATOR=1)
@@ -26,7 +28,7 @@ add_executable(index ${SOURCES} ${INCLUDES})
 
 # Use our filament dryer UI initialization
 set(LVGL_CHOSEN_DEMO init_ui)
-set_source_files_properties(src/main.c PROPERTIES COMPILE_FLAGS -DCHOSEN_DEMO=${LVGL_CHOSEN_DEMO})
+set_source_files_properties(main.c PROPERTIES COMPILE_FLAGS -DCHOSEN_DEMO=${LVGL_CHOSEN_DEMO})
 
 # Set executable suffix to html
 set(CMAKE_EXECUTABLE_SUFFIX ".html")
