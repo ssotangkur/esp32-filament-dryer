@@ -8,7 +8,10 @@ services:
     volumes:
       - ./build:/project/build
       - ./build_cache:/emsdk/upstream/emscripten/cache
+      - ./ccache:/root/.ccache  # Add ccache volume for persistent caching
       - ../managed_components:/project/managed_components:ro
       - ../main:/project/main:ro
       - ../include:/project/include:ro
       - ./docker_root:/project/ui_simulator:ro
+    # Keep container running for multiple incremental builds
+    command: tail -f /dev/null

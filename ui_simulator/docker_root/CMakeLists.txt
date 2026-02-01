@@ -4,17 +4,38 @@
 cmake_minimum_required(VERSION 3.12)
 project (ui_simulator)
 
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O2 -s USE_SDL=2")
+# Use -O0 for faster builds during development, -O2 for release
+# set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O2 -s USE_SDL=2")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O0 -s USE_SDL=2")
+
+message(STATUS "Using pre-built LVGL libraries from /usr/local/lib")
+
+# Include simulator stubs first (before real ESP-IDF headers)
+# This allows ui.c to use ESP-IDF APIs without conditional compilation
+include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/..)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../managed_components/lvgl__lvgl)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../managed_components/lvgl__lvgl/src)
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../managed_components/lvgl__lvgl/examples)
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../managed_components/lvgl__lvgl/demos)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../include)
 
-# Add LVGL subdirectory to build it
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../managed_components/lvgl__lvgl lvgl)
+# lv_conf.h needs to be next to the lvgl folder for proper includes
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../managed_components)
+
+# Use pre-built libraries (including demos and examples)
+# These are built during Docker image creation for fast incremental builds
+add_library(lvgl STATIC IMPORTED)
+set_target_properties(lvgl PROPERTIES IMPORTED_LOCATION "/usr/local/lib/liblvgl.a")
+
+add_library(lvgl_thorvg STATIC IMPORTED)
+set_target_properties(lvgl_thorvg PROPERTIES IMPORTED_LOCATION "/usr/local/lib/liblvgl_thorvg.a")
+
+# Include demos and examples libraries
+add_library(lvgl_demos STATIC IMPORTED)
+set_target_properties(lvgl_demos PROPERTIES IMPORTED_LOCATION "/usr/local/lib/liblvgl_demos.a")
+
+add_library(lvgl_examples STATIC IMPORTED)
+set_target_properties(lvgl_examples PROPERTIES IMPORTED_LOCATION "/usr/local/lib/liblvgl_examples.a")
 
 # Define source files - include both the simulator files and our UI files
 file(GLOB_RECURSE MY_SOURCES "/project/ui_simulator/src/*.c")
@@ -35,9 +56,9 @@ set(CMAKE_EXECUTABLE_SUFFIX ".html")
 
 target_link_libraries(index
     lvgl
-    lvgl_examples
-    lvgl_demos
     lvgl_thorvg
+    lvgl_demos
+    lvgl_examples
     SDL2
 )
 

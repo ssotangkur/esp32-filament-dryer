@@ -1,6 +1,6 @@
 FROM emscripten/emsdk:latest
 
-# Install additional build tools
+# Install additional build tools including ccache for faster incremental builds
 RUN apt-get update && apt-get install -y \
   build-essential \
   cmake \
@@ -8,16 +8,35 @@ RUN apt-get update && apt-get install -y \
   wget \
   unzip \
   python3 \
+  ccache \
   && rm -rf /var/lib/apt/lists/*
+
+# Set up ccache configuration
+ENV CC="ccache emcc" \
+    CXX="ccache em++" \
+    CCACHE_COMPRESS=1 \
+    CCACHE_MAXSIZE=1G
 
 # Set working directory
 WORKDIR /project
 
-# Copy only the essential project files needed for the build
-# COPY sdkconfig.h ./sdkconfig.h
+# Copy managed_components for pre-building (these change infrequently)
+COPY managed_components /project/managed_components
+
+# Copy UI simulator configuration files
+COPY ui_simulator/docker_root/lv_conf.h /project/ui_simulator/docker_root/
+COPY ui_simulator/docker_root/CMakeLists_prebuilt.txt /project/ui_simulator/docker_root/
+COPY ui_simulator/docker_root/prebuild_libs.sh /tmp/prebuild_libs.sh
+
+# Make prebuild script executable and run it to create cached libraries
+RUN chmod +x /tmp/prebuild_libs.sh && /tmp/prebuild_libs.sh
 
 # Set the working directory to ui_simulator for the build
 WORKDIR /project/ui_simulator
 
+# Create a script that handles both full and incremental builds
+COPY ui_simulator/docker_root/build_script.sh /tmp/build_script.sh
+RUN chmod +x /tmp/build_script.sh
+
 # Command to run the build when container is started
-CMD ["bash", "-c", "cd /emsdk && . ./emsdk_env.sh && cd /project/ui_simulator && mkdir -p /project/build && emcmake cmake . -B /project/build && emmake make -C /project/build -j4 && echo 'Build completed successfully! Find the output in ui_simulator/build/'"]
+CMD ["/tmp/build_script.sh"]
