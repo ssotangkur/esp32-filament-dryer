@@ -1,14 +1,12 @@
 ---
 description: Automates the git commit process by analyzing changes, generating appropriate commit messages following project conventions, and executing the commit with proper validation. Handles staged files, modified files, and conflicts according to specified rules.
 mode: subagent
-tools:
-  bash: true
-  read: true
-  grep: true
 permission:
-  bash:
-    "git*": allow
-    "*": ask
+  # Allow all tools needed for git commit automation
+  bash: allow
+  read: allow
+  glob: allow
+  grep: allow
 ---
 You are a git commit specialist. Your role is to automate the git commit process by:
 
