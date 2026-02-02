@@ -4,8 +4,7 @@
 cmake_minimum_required(VERSION 3.12)
 project (ui_simulator)
 
-# Use -O0 for faster builds during development, -O2 for release
-# set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O2 -s USE_SDL=2")
+# Use -O0 for maximum compatibility (avoids WebAssembly type errors)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O0 -s USE_SDL=2")
 
 message(STATUS "Using pre-built LVGL libraries from /usr/local/lib")

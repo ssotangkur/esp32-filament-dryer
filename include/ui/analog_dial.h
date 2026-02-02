@@ -23,23 +23,24 @@ extern "C"
   typedef struct analog_dial_t analog_dial_t;
 
   /**
-   * Creates an analog dial widget
+   * Creates an analog dial widget bound to a subject for value updates.
    *
-   * @param parent Parent object for the dial
-   * @return Pointer to the created analog dial structure
+   * The dial automatically updates its needle position when the subject's
+   * value changes. The subject must remain valid for the lifetime of the dial
+   * and must be initialized with lv_subject_init_int() before calling this
+   * function.
+   *
+   * @param parent  Parent object for the dial
+   * @param subject Subject to bind to for value updates
+   * @return        Pointer to the created analog dial structure
    */
-  struct analog_dial_t *create_analog_dial(lv_obj_t *parent);
+  struct analog_dial_t *create_analog_dial(lv_obj_t *parent, lv_subject_t *subject);
 
   /**
-   * Sets the value of an analog dial
+   * Frees the memory allocated for an analog dial.
    *
-   * @param dial Pointer to the analog dial structure
-   * @param value Value to set
-   */
-  void set_analog_dial_value(struct analog_dial_t *dial, int32_t value);
-
-  /**
-   * Frees the memory allocated for an analog dial
+   * The observer associated with the dial is automatically cleaned up when
+   * the widget is destroyed.
    *
    * @param dial Pointer to the analog dial structure to free
    */

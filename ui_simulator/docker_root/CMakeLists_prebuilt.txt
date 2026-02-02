@@ -4,8 +4,8 @@
 cmake_minimum_required(VERSION 3.12)
 project(lvgl_prebuilt)
 
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O2 -s USE_SDL=2")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O2 -s USE_SDL=2")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O0 -s USE_SDL=2")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O0 -s USE_SDL=2")
 
 # Enable demos and examples for maximum flexibility
 # Since we're pre-building once, include everything so we don't need to rebuild later

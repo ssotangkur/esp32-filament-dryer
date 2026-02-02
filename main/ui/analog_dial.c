@@ -1,6 +1,20 @@
 #include "lvgl.h"
 #include "ui/analog_dial.h"
 #include <stdlib.h>
+#include <math.h>
+
+/* Physics update rate: 60fps = ~16.67ms */
+#define PHYSICS_UPDATE_PERIOD_MS 16
+#define PHYSICS_DT_S (PHYSICS_UPDATE_PERIOD_MS / 1000.0f)
+
+/* Spring-damper physics parameters */
+#define SPRING_CONSTANT_K 50.0f    /* Higher = stiffer spring, more overshoot */
+#define DAMPING_COEFFICIENT_C 0.5f /* Higher = more damping, less oscillation */
+#define NEEDLE_MASS_M 0.1f         /* Mass of the needle (affects inertia) */
+
+/* Convergence threshold - stop physics when close enough */
+#define POSITION_TOLERANCE 0.1f /* Degrees */
+#define VELOCITY_TOLERANCE 0.5f /* Degrees per second */
 
 struct analog_dial_t
 {
@@ -8,19 +22,82 @@ struct analog_dial_t
   lv_obj_t *scale;
   lv_obj_t *needle_line;
   int32_t needle_length;
+
+  /* Physics state - using floats for smooth motion */
+  float position;        /* Current needle position */
+  float target_position; /* Target position from subject */
+  float velocity;        /* Current velocity */
+
+  /* Physics timer for continuous updates */
+  lv_timer_t *physics_timer;
 };
 
-void set_analog_dial_value(struct analog_dial_t *dial, int32_t value)
+/**
+ * Physics update callback - runs at 60fps
+ * Calculates spring-damper forces and updates needle position
+ */
+static void physics_update_cb(lv_timer_t *timer)
 {
+  struct analog_dial_t *dial = lv_timer_get_user_data(timer);
+
+  /* Calculate spring force: F_spring = -k × displacement */
+  float displacement = dial->target_position - dial->position;
+  float spring_force = SPRING_CONSTANT_K * displacement;
+
+  /* Calculate damper force: F_damper = -c × velocity */
+  float damper_force = DAMPING_COEFFICIENT_C * dial->velocity;
+
+  /* Net force */
+  float net_force = spring_force - damper_force;
+
+  /* Update velocity: v += (F / m) × dt */
+  float acceleration = net_force / NEEDLE_MASS_M;
+  dial->velocity += acceleration * PHYSICS_DT_S;
+
+  /* Update position: x += v × dt */
+  dial->position += dial->velocity * PHYSICS_DT_S;
+
+  /* Update LVGL needle position */
   lv_scale_set_line_needle_value(
       dial->scale,
       dial->needle_line,
       dial->needle_length,
-      value);
+      (int32_t)dial->position);
+
+  /* Check if we've converged to target (close enough and slow enough) */
+  // if (fabsf(displacement) < POSITION_TOLERANCE &&
+  //     fabsf(dial->velocity) < VELOCITY_TOLERANCE) {
+  //   /* Snap to exact target and pause physics timer */
+  //   dial->position = dial->target_position;
+  //   dial->velocity = 0.0f;
+  //   lv_scale_set_line_needle_value(
+  //       dial->scale,
+  //       dial->needle_line,
+  //       dial->needle_length,
+  //       (int32_t)dial->position);
+  //   lv_timer_pause(dial->physics_timer);
+  // }
+}
+
+/**
+ * Observer callback - triggered when subject value changes
+ * Only sets target position and wakes physics timer
+ */
+static void dial_value_observer_cb(lv_observer_t *observer, lv_subject_t *subject)
+{
+  struct analog_dial_t *dial = lv_observer_get_user_data(observer);
+  int32_t new_value = lv_subject_get_int(subject);
+
+  /* Update target position */
+  dial->target_position = (float)new_value;
+
+  /* Resume physics timer if it was paused */
+  lv_timer_resume(dial->physics_timer);
 }
 
 struct analog_dial_t *create_analog_dial(
-    lv_obj_t *parent)
+    lv_obj_t *parent,
+    lv_subject_t *subject)
 {
   /* Dial is bigger that the window it occupies so we need to wrap it
     in a container and use padding to shift it to the right location.
@@ -63,6 +140,11 @@ struct analog_dial_t *create_analog_dial(
   int bottom_padding = d2 - ANALOG_DIAL_VERT_SHIFT - c2;
 
   struct analog_dial_t *dial = malloc(sizeof(struct analog_dial_t));
+
+  /* Initialize physics state */
+  dial->position = 0.0f;
+  dial->target_position = 0.0f;
+  dial->velocity = 0.0f;
 
   lv_obj_t *container = lv_obj_create(parent);
   dial->container = container;
@@ -126,14 +208,24 @@ struct analog_dial_t *create_analog_dial(
 
   dial->needle_length = d2 + major_tick_length;
 
-  set_analog_dial_value(dial, 53);
-  // lv_scale_set_line_needle_value(scale_line, needle_line, d2 + major_tick_length, 53);
+  /* Create physics timer - initially paused */
+  dial->physics_timer = lv_timer_create(physics_update_cb, PHYSICS_UPDATE_PERIOD_MS, dial);
+  lv_timer_pause(dial->physics_timer);
+
+  /* Bind observer to subject - initial notification will set target and wake physics */
+  lv_subject_add_observer_obj(subject, dial_value_observer_cb, container, dial);
 
   return dial;
 }
 
 void free_analog_dial(struct analog_dial_t *dial)
 {
+  /* Stop physics timer first */
+  if (dial->physics_timer != NULL)
+  {
+    lv_timer_del(dial->physics_timer);
+  }
+
   /* deletes recursively delete children too but we will still try to delete
      from bottom up explicitly */
   lv_obj_delete(dial->needle_line);
