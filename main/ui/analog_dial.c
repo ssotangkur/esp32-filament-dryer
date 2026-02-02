@@ -13,10 +13,6 @@
 #define DAMPING_COEFFICIENT_C 0.8f /* Higher = more damping, less oscillation */
 #define NEEDLE_MASS_M 0.1f         /* Mass of the needle (affects inertia) */
 
-/* Convergence threshold - stop physics when close enough */
-#define POSITION_TOLERANCE 0.1f /* Degrees */
-#define VELOCITY_TOLERANCE 0.5f /* Degrees per second */
-
 struct analog_dial_t
 {
   lv_obj_t *container;
@@ -65,20 +61,6 @@ static void physics_update_cb(lv_timer_t *timer)
       dial->needle_line,
       dial->needle_length,
       (int32_t)dial->position);
-
-  /* Check if we've converged to target (close enough and slow enough) */
-  // if (fabsf(displacement) < POSITION_TOLERANCE &&
-  //     fabsf(dial->velocity) < VELOCITY_TOLERANCE) {
-  //   /* Snap to exact target and pause physics timer */
-  //   dial->position = dial->target_position;
-  //   dial->velocity = 0.0f;
-  //   lv_scale_set_line_needle_value(
-  //       dial->scale,
-  //       dial->needle_line,
-  //       dial->needle_length,
-  //       (int32_t)dial->position);
-  //   lv_timer_pause(dial->physics_timer);
-  // }
 }
 
 /**
