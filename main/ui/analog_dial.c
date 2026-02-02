@@ -86,10 +86,10 @@ static void physics_update_cb(lv_timer_t *timer)
 static void dial_value_observer_cb(lv_observer_t *observer, lv_subject_t *subject)
 {
   struct analog_dial_t *dial = lv_observer_get_user_data(observer);
-  int32_t new_value = lv_subject_get_int(subject);
+  float new_value = lv_subject_get_float(subject);
 
   /* Update target position */
-  dial->target_position = (float)new_value;
+  dial->target_position = new_value;
 
   /* Resume physics timer if it was paused */
   lv_timer_resume(dial->physics_timer);
