@@ -8,8 +8,8 @@
 #define PHYSICS_DT_S (PHYSICS_UPDATE_PERIOD_MS / 1000.0f)
 
 /* Spring-damper physics parameters */
-#define SPRING_CONSTANT_K 50.0f    /* Higher = stiffer spring, more overshoot */
-#define DAMPING_COEFFICIENT_C 0.5f /* Higher = more damping, less oscillation */
+#define SPRING_CONSTANT_K 15.0f    /* Higher = stiffer spring, more overshoot */
+#define DAMPING_COEFFICIENT_C 0.8f /* Higher = more damping, less oscillation */
 #define NEEDLE_MASS_M 0.1f         /* Mass of the needle (affects inertia) */
 
 /* Convergence threshold - stop physics when close enough */
