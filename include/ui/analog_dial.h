@@ -30,11 +30,28 @@ extern "C"
  * and must be initialized with lv_subject_init_float() before calling this
  * function.
  *
- * @param parent  Parent object for the dial
- * @param subject Subject to bind to for value updates (float type)
- * @return        Pointer to the created analog dial structure
+ * The dial displays colored bands on the scale:
+ * - Green: Values within target range [target_value - target_range/2,
+ *   target_value + target_range/2]
+ * - Red: Values above target range (target_value + target_range/2 to max_value)
+ * - Default: Values below target range use default scale styling
+ *
+ * @param parent        Parent object for the dial
+ * @param subject       Subject to bind to for value updates (float type)
+ * @param target_value  The target value for the green band center
+ * @param target_range  The total width of the green band (green = target +/-
+ *   range/2)
+ * @param min_value     Minimum value for the dial scale
+ * @param max_value     Maximum value for the dial scale
+ * @return              Pointer to the created analog dial structure
  */
-  struct analog_dial_t *create_analog_dial(lv_obj_t *parent, lv_subject_t *subject);
+  struct analog_dial_t *create_analog_dial(
+      lv_obj_t *parent,
+      lv_subject_t *subject,
+      float target_value,
+      float target_range,
+      float min_value,
+      float max_value);
 
   /**
    * Frees the memory allocated for an analog dial.

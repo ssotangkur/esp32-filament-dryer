@@ -30,8 +30,16 @@ void init_ui(void)
     lv_obj_t *test_label = lv_label_create(lv_screen_active());
     lv_label_set_text(test_label, "LVGL 9.x");
 
-    /* Create analog dial - bound to temperature subject */
-    struct analog_dial_t *dial = create_analog_dial(lv_screen_active(), &g_subject_temperature);
+    /* Create analog dial - bound to temperature subject
+     * Target: 45°C with 10°C range (40-50°C is green, >50°C is red)
+     * Scale range: 0-120°C */
+    struct analog_dial_t *dial = create_analog_dial(
+        lv_screen_active(),
+        &g_subject_temperature,
+        100.0f,  /* target_value */
+        10.0f,   /* target_range */
+        0.0f,    /* min_value */
+        120.0f); /* max_value */
 
     /* Try any of the demos by uncommenting one of the lines below */
     // lv_demo_widgets();

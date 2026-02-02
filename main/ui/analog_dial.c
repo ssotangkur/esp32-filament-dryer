@@ -2,7 +2,7 @@
 #include "ui/analog_dial.h"
 #include <stdlib.h>
 #include <stdio.h>
-#include <math.h>
+#include <string.h>
 
 /* Physics update rate: 60fps = ~16.67ms */
 #define PHYSICS_UPDATE_PERIOD_MS 16
@@ -20,6 +20,20 @@ struct analog_dial_t
   lv_obj_t *needle_line;
   lv_obj_t *value_label;
   int32_t needle_length;
+
+  /* Section styles for green range (target) - must persist for LVGL */
+  lv_style_t style_green_main;       /* Arc color */
+  lv_style_t style_green_indicator;  /* Major ticks and labels */
+  lv_style_t style_green_items;      /* Minor ticks */
+
+  /* Section styles for red range (above target) - must persist for LVGL */
+  lv_style_t style_red_main;         /* Arc color */
+  lv_style_t style_red_indicator;    /* Major ticks and labels */
+  lv_style_t style_red_items;        /* Minor ticks */
+
+  /* Range boundaries for value label coloring */
+  float green_range_low;
+  float green_range_high;
 
   /* Physics state - using floats for smooth motion */
   float position;        /* Current needle position */
@@ -65,7 +79,7 @@ static void physics_update_cb(lv_timer_t *timer)
 
 /**
  * Observer callback - triggered when subject value changes
- * Updates target position, value label, and wakes physics timer
+ * Updates target position, value label color, and wakes physics timer
  */
 static void dial_value_observer_cb(lv_observer_t *observer, lv_subject_t *subject)
 {
@@ -80,13 +94,32 @@ static void dial_value_observer_cb(lv_observer_t *observer, lv_subject_t *subjec
   snprintf(value_text, sizeof(value_text), "%.1f", new_value);
   lv_label_set_text(dial->value_label, value_text);
 
+  /* Update value label color based on which range the value falls into */
+  if (new_value >= dial->green_range_low && new_value <= dial->green_range_high)
+  {
+    lv_obj_set_style_text_color(dial->value_label, lv_palette_main(LV_PALETTE_GREEN), LV_PART_MAIN);
+  }
+  else if (new_value > dial->green_range_high)
+  {
+    lv_obj_set_style_text_color(dial->value_label, lv_palette_main(LV_PALETTE_RED), LV_PART_MAIN);
+  }
+  else
+  {
+    /* Below green range - use default black color */
+    lv_obj_set_style_text_color(dial->value_label, lv_color_black(), LV_PART_MAIN);
+  }
+
   /* Resume physics timer if it was paused */
   lv_timer_resume(dial->physics_timer);
 }
 
 struct analog_dial_t *create_analog_dial(
     lv_obj_t *parent,
-    lv_subject_t *subject)
+    lv_subject_t *subject,
+    float target_value,
+    float target_range,
+    float min_value,
+    float max_value)
 {
   /* Dial is bigger that the window it occupies so we need to wrap it
     in a container and use padding to shift it to the right location.
@@ -183,9 +216,72 @@ struct analog_dial_t *create_analog_dial(
   /* Rotate labels to match tick angle */
   // lv_obj_set_style_transform_rotation(scale_line, LV_SCALE_LABEL_ROTATE_MATCH_TICKS + 900, LV_PART_INDICATOR);
 
-  lv_scale_set_range(scale_line, ANALOG_DIAL_RANGE_START, ANALOG_DIAL_RANGE_END);
+  lv_scale_set_range(scale_line, min_value, max_value);
 
   lv_scale_set_angle_range(scale_line, ANALOG_DIAL_ANGLE_RANGE);
+
+  /* Calculate green band range: target +/- (range/2) */
+  float green_low = target_value - (target_range / 2.0f);
+  float green_high = target_value + (target_range / 2.0f);
+
+  /* Clamp to min/max bounds */
+  if (green_low < min_value)
+  {
+    green_low = min_value;
+  }
+  if (green_high > max_value)
+  {
+    green_high = max_value;
+  }
+
+  /* Store range boundaries for value label coloring */
+  dial->green_range_low = green_low;
+  dial->green_range_high = green_high;
+
+  /* Initialize green section styles */
+  lv_style_init(&dial->style_green_main);
+  lv_style_set_arc_color(&dial->style_green_main, lv_palette_main(LV_PALETTE_GREEN));
+  lv_style_set_arc_width(&dial->style_green_main, 4);
+
+  lv_style_init(&dial->style_green_indicator);
+  lv_style_set_text_color(&dial->style_green_indicator, lv_palette_main(LV_PALETTE_GREEN));
+  lv_style_set_line_color(&dial->style_green_indicator, lv_palette_main(LV_PALETTE_GREEN));
+
+  lv_style_init(&dial->style_green_items);
+  lv_style_set_line_color(&dial->style_green_items, lv_palette_main(LV_PALETTE_GREEN));
+
+  /* Initialize red section styles */
+  lv_style_init(&dial->style_red_main);
+  lv_style_set_arc_color(&dial->style_red_main, lv_palette_main(LV_PALETTE_RED));
+  lv_style_set_arc_width(&dial->style_red_main, 4);
+
+  lv_style_init(&dial->style_red_indicator);
+  lv_style_set_text_color(&dial->style_red_indicator, lv_palette_main(LV_PALETTE_RED));
+  lv_style_set_line_color(&dial->style_red_indicator, lv_palette_main(LV_PALETTE_RED));
+
+  lv_style_init(&dial->style_red_items);
+  lv_style_set_line_color(&dial->style_red_items, lv_palette_main(LV_PALETTE_RED));
+
+  /* Add green section with all style components */
+  if (green_low < green_high)
+  {
+    lv_scale_section_t *section_green = lv_scale_add_section(scale_line);
+    lv_scale_set_section_range(scale_line, section_green, green_low, green_high);
+    lv_scale_set_section_style_main(scale_line, section_green, &dial->style_green_main);
+    lv_scale_set_section_style_indicator(scale_line, section_green, &dial->style_green_indicator);
+    lv_scale_set_section_style_items(scale_line, section_green, &dial->style_green_items);
+  }
+
+  /* Add red section with all style components */
+  if (green_high < max_value)
+  {
+    lv_scale_section_t *section_red = lv_scale_add_section(scale_line);
+    lv_scale_set_section_range(scale_line, section_red, green_high, max_value);
+    lv_scale_set_section_style_main(scale_line, section_red, &dial->style_red_main);
+    lv_scale_set_section_style_indicator(scale_line, section_red, &dial->style_red_indicator);
+    lv_scale_set_section_style_items(scale_line, section_red, &dial->style_red_items);
+  }
+
   lv_scale_set_rotation(scale_line, 180 + (180 - ANALOG_DIAL_ANGLE_RANGE) / 2);
 
   /* Create value label on container - container is fully visible */
