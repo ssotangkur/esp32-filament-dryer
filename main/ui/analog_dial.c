@@ -66,11 +66,6 @@ static void physics_update_cb(lv_timer_t *timer)
       dial->needle_length,
       (int32_t)dial->position);
 
-  /* Update value label with 1 decimal precision */
-  char value_text[16];
-  snprintf(value_text, sizeof(value_text), "%.1f", dial->position);
-  lv_label_set_text(dial->value_label, value_text);
-
   /* Check if we've converged to target (close enough and slow enough) */
   // if (fabsf(displacement) < POSITION_TOLERANCE &&
   //     fabsf(dial->velocity) < VELOCITY_TOLERANCE) {
@@ -88,7 +83,7 @@ static void physics_update_cb(lv_timer_t *timer)
 
 /**
  * Observer callback - triggered when subject value changes
- * Only sets target position and wakes physics timer
+ * Updates target position, value label, and wakes physics timer
  */
 static void dial_value_observer_cb(lv_observer_t *observer, lv_subject_t *subject)
 {
@@ -97,6 +92,11 @@ static void dial_value_observer_cb(lv_observer_t *observer, lv_subject_t *subjec
 
   /* Update target position */
   dial->target_position = new_value;
+
+  /* Update value label with exact emitted value (1 decimal precision) */
+  char value_text[16];
+  snprintf(value_text, sizeof(value_text), "%.1f", new_value);
+  lv_label_set_text(dial->value_label, value_text);
 
   /* Resume physics timer if it was paused */
   lv_timer_resume(dial->physics_timer);
@@ -206,14 +206,16 @@ struct analog_dial_t *create_analog_dial(
   lv_scale_set_angle_range(scale_line, ANALOG_DIAL_ANGLE_RANGE);
   lv_scale_set_rotation(scale_line, 180 + (180 - ANALOG_DIAL_ANGLE_RANGE) / 2);
 
-  /* Create value label - positioned before needle so it's under it in z-order */
-  lv_obj_t *value_label = lv_label_create(scale_line);
+  /* Create value label on container - container is fully visible */
+  lv_obj_t *value_label = lv_label_create(container);
   dial->value_label = value_label;
   lv_obj_set_style_text_font(value_label, &lv_font_montserrat_24, LV_PART_MAIN);
   lv_obj_set_style_text_color(value_label, lv_color_black(), LV_PART_MAIN);
+  lv_obj_set_style_bg_opa(value_label, LV_OPA_TRANSP, LV_PART_MAIN);
+  lv_obj_set_style_text_opa(value_label, LV_OPA_COVER, LV_PART_MAIN);
   lv_label_set_text(value_label, "0.0");
-  /* Center horizontally, position lower than center vertically */
-  lv_obj_align(value_label, LV_ALIGN_CENTER, 0, 25);
+  /* Move up from bottom - container is 80px high, place label at visible bottom area */
+  lv_obj_align(value_label, LV_ALIGN_BOTTOM_MID, 0, -35);
 
   lv_obj_t *needle_line = lv_line_create(scale_line);
   dial->needle_line = needle_line;
