@@ -1,6 +1,7 @@
 #include "lvgl.h"
 #include "ui/analog_dial.h"
 #include <stdlib.h>
+#include <stdio.h>
 #include <math.h>
 
 /* Physics update rate: 60fps = ~16.67ms */
@@ -21,6 +22,7 @@ struct analog_dial_t
   lv_obj_t *container;
   lv_obj_t *scale;
   lv_obj_t *needle_line;
+  lv_obj_t *value_label;
   int32_t needle_length;
 
   /* Physics state - using floats for smooth motion */
@@ -63,6 +65,11 @@ static void physics_update_cb(lv_timer_t *timer)
       dial->needle_line,
       dial->needle_length,
       (int32_t)dial->position);
+
+  /* Update value label with 1 decimal precision */
+  char value_text[16];
+  snprintf(value_text, sizeof(value_text), "%.1f", dial->position);
+  lv_label_set_text(dial->value_label, value_text);
 
   /* Check if we've converged to target (close enough and slow enough) */
   // if (fabsf(displacement) < POSITION_TOLERANCE &&
@@ -199,6 +206,15 @@ struct analog_dial_t *create_analog_dial(
   lv_scale_set_angle_range(scale_line, ANALOG_DIAL_ANGLE_RANGE);
   lv_scale_set_rotation(scale_line, 180 + (180 - ANALOG_DIAL_ANGLE_RANGE) / 2);
 
+  /* Create value label - positioned before needle so it's under it in z-order */
+  lv_obj_t *value_label = lv_label_create(scale_line);
+  dial->value_label = value_label;
+  lv_obj_set_style_text_font(value_label, &lv_font_montserrat_24, LV_PART_MAIN);
+  lv_obj_set_style_text_color(value_label, lv_color_black(), LV_PART_MAIN);
+  lv_label_set_text(value_label, "0.0");
+  /* Center horizontally, position lower than center vertically */
+  lv_obj_align(value_label, LV_ALIGN_CENTER, 0, 25);
+
   lv_obj_t *needle_line = lv_line_create(scale_line);
   dial->needle_line = needle_line;
 
@@ -229,6 +245,7 @@ void free_analog_dial(struct analog_dial_t *dial)
   /* deletes recursively delete children too but we will still try to delete
      from bottom up explicitly */
   lv_obj_delete(dial->needle_line);
+  lv_obj_delete(dial->value_label);
   lv_obj_delete(dial->scale);
   lv_obj_delete(dial->container);
   free(dial);
