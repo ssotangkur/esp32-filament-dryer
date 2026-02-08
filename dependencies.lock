@@ -50,6 +50,6 @@ direct_dependencies:
 - joltwallet/littlefs
 - lvgl/lvgl
 - ssotangkur/sysmon
-manifest_hash: d4cff7003776949eefef03899093268107471f1a24e01e00b5d135f56d5cb85a
+manifest_hash: 7e22a263a4655ab57c8b917c31ba2a73d7d3a3df0d2d93997251e382e6559716
 target: esp32s3
 version: 2.0.0

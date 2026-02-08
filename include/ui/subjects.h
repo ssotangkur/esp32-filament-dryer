@@ -15,11 +15,11 @@ extern "C"
  * On the device, they will be updated by actual sensor readings.
  */
 
-/* Temperature dial subject (0-120 range) */
-extern lv_subject_t g_subject_temperature;
+/* Heater temperature dial subject (0-120 range) */
+extern lv_subject_t g_subject_heater_temp;
 
-/* Humidity dial subject (0-100 range) */
-extern lv_subject_t g_subject_humidity;
+/* Air temperature dial subject (0-120 range) */
+extern lv_subject_t g_subject_air_temp;
 
 /* Heater power subject (0-100%) */
 extern lv_subject_t g_subject_heater_power;
@@ -50,16 +50,16 @@ void subjects_deinit(void);
  */
 
 /**
- * @brief Set temperature subject value (thread-safe)
- * @param temperature Temperature value in degrees Celsius
+ * @brief Set heater temperature subject value (thread-safe)
+ * @param temperature Heater temperature value in degrees Celsius
  */
-void subjects_set_temperature(float temperature);
+void subjects_set_heater_temp(float temperature);
 
 /**
- * @brief Set humidity subject value (thread-safe)
- * @param humidity Humidity value as percentage (0-100)
+ * @brief Set air temperature subject value (thread-safe)
+ * @param temperature Air temperature value in degrees Celsius
  */
-void subjects_set_humidity(float humidity);
+void subjects_set_air_temp(float temperature);
 
 /**
  * @brief Set heater power subject value (thread-safe)

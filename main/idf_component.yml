@@ -3,7 +3,6 @@ dependencies:
   ## Required IDF version
   idf:
     version: '>=4.1.0'
-  lvgl/lvgl: ^9.4
   espressif/esp_lvgl_port: ^2.7.0
   ssotangkur/sysmon:
     version: c59a93a3296e8c56699cb8c87aeff0bfcf5cc8d4
@@ -20,3 +19,4 @@ dependencies:
   #   # All dependencies of the `main` are public by default.
   #   public: true
   joltwallet/littlefs: ==1.20.3
+  lvgl/lvgl: ~9.4.0
