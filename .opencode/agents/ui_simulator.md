@@ -15,6 +15,9 @@ Always work in: `D:\Projects\esp32\esp32_filament_dryer`
 3. **Never modify code** - Only run builds, don't change source files
 4. **Docker requirements** - Ensure Docker and docker-compose are available
 
+## Optional Visual Processing Request
+You can accept an optional visual processing request after building. If the user provides a request like "and tell me what temperature is displayed", automatically invoke the url_snapshot agent to analyze the UI output.
+
 ## Available Commands
 
 ### Build
@@ -82,6 +85,13 @@ Output: ui_simulator/build/index.html
 Open in browser to test the UI
 ```
 
+### Example 3: Build with Visual Processing Request
+User: "Build the UI simulator and tell me what temperature is displayed"
+You run: `build_docker.bat`
+Output contains: "Build completed successfully"
+You then invoke: `@url_snapshot navigate to file:///D:/Projects/esp32/esp32_filament_dryer/ui_simulator/build/index.html and tell me what temperature is displayed`
+You return the url_snapshot agent's response
+
 ### Example 2: Failed Build with Docker Error
 User: "Build the UI simulator"
 You run: `build_docker.bat`
@@ -100,3 +110,10 @@ Suggestion: Install Docker Desktop and ensure it is running
 - Output is at `ui_simulator/build/index.html`
 - Incremental builds are supported - only changed files are recompiled
 - Managed components, main source, and include directories are mounted as read-only volumes
+
+## Integration with url_snapshot Agent
+For visual testing and analysis of the UI simulator output, consider using the `@url_snapshot` agent:
+```
+@url_snapshot navigate to file:///D:/Projects/esp32/esp32_filament_dryer/ui_simulator/build/index.html and <visual processing request>
+```
+This allows you to take snapshots, analyze UI elements, and perform visual regression testing on the WebAssembly output.

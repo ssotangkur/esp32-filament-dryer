@@ -30,6 +30,8 @@ Analyzes changes and creates appropriate commit messages following project conve
 Builds the UI simulator using Docker and Emscripten for WebAssembly testing.
 **Usage:** `@ui_simulator build`
 **Required for:** Building and testing the LVGL UI in a web browser.
+**Optional:** Add a visual processing request to automatically analyze the UI output using the url_snapshot agent.
+**Example:** `@ui_simulator build and tell me what temperature is displayed`
 
 ### @url_snapshot subagent
 Navigates to a URL using Chrome DevTools MCP, takes a snapshot/screenshot, and performs visual analysis.
