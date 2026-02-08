@@ -26,6 +26,17 @@ Analyzes changes and creates appropriate commit messages following project conve
 **Usage:** `@git_commit_assistant please commit these changes`
 **Required for:** All git commits (see p.X).
 
+### @ui_simulator subagent
+Builds the UI simulator using Docker and Emscripten for WebAssembly testing.
+**Usage:** `@ui_simulator build`
+**Required for:** Building and testing the LVGL UI in a web browser.
+
+### @url_snapshot subagent
+Navigates to a URL using Chrome DevTools MCP, takes a snapshot/screenshot, and performs visual analysis.
+**Usage:** `@url_snapshot navigate to <url> and <visual processing request>`
+**Required for:** Visual testing and analysis of UI simulator or web pages.
+**Example:** `@url_snapshot navigate to file:///D:/Projects/esp32/esp32_filament_dryer/ui_simulator/build/index.html and tell me what temperature is displayed`
+
 ### Skill Instructions
 Load specialized skills for detailed procedures when working on complex tasks:
 

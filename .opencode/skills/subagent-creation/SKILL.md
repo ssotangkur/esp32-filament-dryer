@@ -69,13 +69,118 @@ You are a git commit specialist. Your role is to automate the git commit process
 7. Validate commit message and execute commit with proper error handling
 ```
 
+### Finding Model IDs
+
+When specifying a model, you need the exact model ID from OpenCode Zen:
+
+**Fetch available models:**
+```bash
+# Use webfetch to get the model list
+curl https://opencode.ai/zen/v1/models
+```
+
+**Common OpenCode Zen models:**
+- `kimi-k2.5-free` - Free tier, good for general tasks
+- `kimi-k2.5` - Paid tier, higher performance
+- `claude-sonnet-4` - Anthropic Claude Sonnet
+- `gpt-5.1-codex` - OpenAI GPT with code capabilities
+
+**Tip:** Always fetch the current model list as available models change over time.
+
 ### Key Configuration Options
 
 - **description** (required): A brief description of what the agent does
 - **mode**: Must be `subagent` for subagents
-- **model**: Optional model override
+- **model**: Optional model override (see Finding Model IDs above)
 - **tools**: Define which tools the agent can access
 - **permission**: Configure granular permissions for specific commands
+
+### Subagent Creation Workflow
+
+Follow this complete workflow when creating a new subagent:
+
+#### Step 1: Define Requirements
+- What task will this subagent handle?
+- What inputs does it need?
+- What tools does it require?
+- Should it validate inputs or push back if incomplete?
+
+#### Step 2: Find Model ID
+Fetch the model list and select the appropriate model for your use case.
+
+#### Step 3: Create Subagent File
+Create `.opencode/agents/<subagent_name>.md` with proper frontmatter and system prompt.
+
+#### Step 4: Write System Prompt
+Include in the system prompt:
+- Clear role definition
+- Required inputs with validation rules
+- Step-by-step workflow
+- Response format (success/error)
+- Usage examples
+
+#### Step 5: Update Documentation
+Add the subagent to `AGENTS.md` following the existing format:
+```markdown
+### @<subagent_name> subagent
+<Description>
+**Usage:** `@<subagent_name> <example command>`
+**Required for:** <When to use>
+**Example:** `@<subagent_name> <concrete example>`
+```
+
+#### Step 6: Test the Subagent
+- Invoke it manually to verify it works
+- Test input validation (missing inputs should push back)
+- Verify the output format matches expectations
+
+### Input Validation Best Practices
+
+Subagents should validate inputs explicitly:
+
+```markdown
+## Required Inputs
+Before proceeding, you MUST receive:
+1. **input1** - Description of what's needed
+2. **input2** - Description of what's needed
+
+## Input Validation
+If any input is missing, push back and request it:
+- Missing input1: "I need [input1]. Please provide [details]"
+- Missing input2: "I need [input2]. Please provide [details]"
+```
+
+### Complete Real-World Example
+
+Here's the `url_snapshot` subagent we created:
+
+**File:** `.opencode/agents/url_snapshot.md`
+```markdown
+---
+description: Navigates to a URL using Chrome DevTools MCP, takes a snapshot/screenshot, and performs visual analysis
+mode: subagent
+model: kimi-k2.5-free
+tools:
+  bash: false
+  read: false
+  write: false
+  edit: false
+  grep: false
+  glob: false
+  webfetch: false
+---
+You are a URL Snapshot specialist...
+[Full system prompt with validation, workflow, examples]
+```
+
+**AGENTS.md entry:**
+```markdown
+### @url_snapshot subagent
+Navigates to a URL using Chrome DevTools MCP...
+**Usage:** `@url_snapshot navigate to <url> and <visual processing request>`
+**Required for:** Visual testing and analysis...
+**Example:** `@url_snapshot navigate to file:///path/to/index.html and tell me what you see`
+```
 
 ### Invoking Subagents
 
