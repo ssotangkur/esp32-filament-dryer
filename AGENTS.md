@@ -16,6 +16,8 @@ Use defined pin macros from `include/product_pins.h`:
 
 ## Subagents & Skills Catalog
 
+**Important:** All subagents are invoked using the `@` mention syntax within the OpenCode interface (TUI/CLI/Web). Do not use these as bash commands.
+
 ### @idf subagent (CRITICAL)
 ESP-IDF build, flash, monitor, clean, fullclean, and reconfigure operations.
 **Usage:** `@idf build`, `@idf flash`, `@idf monitor`, `@idf clean`, `@idf fullclean`, `@idf reconfigure`
