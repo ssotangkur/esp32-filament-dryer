@@ -137,6 +137,8 @@ NEVER commit changes automatically without explicit user approval.
 Always wait for explicit "commit", "yes", "go ahead", "commit now", or "please commit" before running `git commit`.
 This rule is critical and must always be followed.
 
+When permission is granted (e.g., "Let's commit our work"), that permission applies only to the immediate commit operation requested. Any subsequent changes require new explicit approval.
+
 When committing changes, you MUST use the git commit assistant subagent (see Subagents & Skills Catalog, p.X).
 Manual commits using `git commit` directly are prohibited except in emergency situations.
 
