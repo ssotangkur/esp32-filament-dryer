@@ -14,17 +14,31 @@ Use defined pin macros from `include/product_pins.h`:
 - I2C: SCL GPIO 17, SDA GPIO 18
 - Power: BOARD_POWERON (GPIO 15)
 
+## Subagents & Skills Catalog
+
+### @idf subagent (CRITICAL)
+ESP-IDF build, flash, monitor, clean, fullclean, and reconfigure operations.
+**Usage:** `@idf build`, `@idf flash`, `@idf monitor`, `@idf clean`, `@idf fullclean`, `@idf reconfigure`
+**Required for:** All ESP-IDF command execution.
+
+### @git_commit_assistant subagent (CRITICAL)
+Analyzes changes and creates appropriate commit messages following project conventions.
+**Usage:** `@git_commit_assistant please commit these changes`
+**Required for:** All git commits (see p.X).
+
+### Skill Instructions
+Load specialized skills for detailed procedures when working on complex tasks:
+
+| Skill | When to Load |
+|-------|-------------|
+| `skill({ name: "esp-idf-workflow" })` | Building, flashing, or debugging ESP-IDF projects; needing detailed command syntax |
+| `skill({ name: "esp32-testing-patterns" })` | Writing or debugging unit tests; generating mocks; working with CMock/Unity |
+| `skill({ name: "windows-development" })` | Creating or modifying batch/PowerShell scripts; path handling issues |
+| `skill({ name: "subagent-creation" })` | Creating new subagents or understanding subagent configuration |
+
+**Tip:** Skills provide detailed step-by-step guidance and best practices beyond what's in this file. Load them when you need comprehensive workflows.
+
 ## Build/Lint/Test Commands
-
-### Build Commands
-- Build: `esp_idf_shell.bat idf.py build`
-- Clean: `esp_idf_shell.bat idf.py clean`
-- Rebuild: `esp_idf_shell.bat idf.py build --rebuild-cache`
-
-### Flash Commands
-- Flash: `esp_idf_shell.bat idf.py flash`
-- Monitor: `esp_idf_shell.bat idf.py monitor`
-- Combined: `esp_idf_shell.bat idf.py build flash monitor`
 
 ### Test Commands
 - Run all unit tests: `powershell -Command "cd docker_tests\unit_tests; .\run_unit_tests.bat"`
@@ -42,7 +56,6 @@ Tests run in Docker containers with CMock for automated mock generation:
 ## Code Style Guidelines
 
 ### Imports
-- Always include `#include <sdkconfig.h>` first in source files
 - Follow ESP-IDF include order: system includes, ESP-IDF includes, component includes, local includes
 - Use angle brackets for system/ESP-IDF includes: `#include "freertos/FreeRTOS.h"`
 - Use quotes for local includes: `#include "my_component.h"`
@@ -89,11 +102,12 @@ Tests run in Docker containers with CMock for automated mock generation:
 - Use detailed comments for complex algorithms
 - Include @brief, @param, @return, @note where appropriate
 
+## ESP-IDF Subagent Requirement (CRITICAL)
+All ESP-IDF build, flash, monitor, clean, and reconfigure commands MUST be executed through the `@idf` subagent.
+**See:** Subagents & Skills Catalog (p.X) for available commands and usage.
+
 ## ESP-IDF Environment Requirements
-All ESP-IDF commands must be run through `esp_idf_shell.bat`:
-- Build: `esp_idf_shell.bat idf.py build`
-- Flash: `esp_idf_shell.bat idf.py flash`
-- Monitor: `esp_idf_shell.bat idf.py monitor`
+This project uses ESP-IDF v5.5.1 on Windows 11.
 
 NEVER run `idf.py menuconfig` directly - edit `sdkconfig` files instead.
 
@@ -108,11 +122,8 @@ NEVER commit changes automatically without explicit user approval.
 Always wait for explicit "commit", "yes", "go ahead", "commit now", or "please commit" before running `git commit`.
 This rule is critical and must always be followed.
 
-When committing changes, you MUST use the git commit assistant subagent:
- - Use "@git_commit_assistant please commit these changes" to automatically analyze and commit changes
- - The subagent will follow project conventions and create appropriate commit messages
- - The subagent handles staged vs modified files appropriately
- - Manual commits using `git commit` directly are prohibited except in emergency situations
+When committing changes, you MUST use the git commit assistant subagent (see Subagents & Skills Catalog, p.X).
+Manual commits using `git commit` directly are prohibited except in emergency situations.
 
 ## Testing Framework
 This project uses Docker-based unit testing with CMock:
@@ -120,14 +131,3 @@ This project uses Docker-based unit testing with CMock:
 - Use CMock-generated mocks: `#include "Mockmock_component.h"`
 - Follow Unity testing patterns with setUp/tearDown
 - Use ignore plugins for flexible argument matching: `heap_caps_malloc_IgnoreAndReturn()`
-
-## Skill Instructions
-When working on specific tasks, consider loading these skills for detailed procedures:
-- For ESP-IDF command details: `skill({ name: "esp-idf-workflow" })`
-- For testing patterns: `skill({ name: "esp32-testing-patterns" })`
-- For Windows development: `skill({ name: "windows-development" })`
-- For subagent creation: `skill({ name: "subagent-creation" })`
-
-## Subagents
-This project includes specialized subagents for common tasks:
-- For git commits: `@git_commit_assistant please commit these changes` - analyzes changes and creates appropriate commit messages following project conventions (REQUIRED for all commits)
