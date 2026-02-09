@@ -11,6 +11,7 @@
 #include "startup_tests.h"
 #include "display.h"
 #include "ui/ui.h"
+#include "ui/subjects.h"
 #include "diagnostic.h"
 #include "wifi.h"
 #include "ota.h"
@@ -47,7 +48,10 @@ void app_main(void)
     // Initialize LCD display
     init_display();
 
-    // Initialize temperature sensors
+    // Initialize UI subjects first (before temperature sensors)
+    subjects_init();
+
+    // Initialize temperature sensors (publishes to subjects via callbacks)
     temp_sensor_init();
 
     // Start web server
@@ -56,6 +60,6 @@ void app_main(void)
     // Start FPS monitoring
     fps_monitor_start();
 
-    // Initialize and start UI
+    // Initialize and start UI (creates widgets bound to subjects)
     init_ui();
 }
