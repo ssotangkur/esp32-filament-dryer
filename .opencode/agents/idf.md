@@ -33,6 +33,25 @@ cd "D:\Projects\esp32\esp32_filament_dryer"; .\esp_idf_shell.bat idf.py monitor
 ```
 For monitor, capture only first 30 lines or crash output, then exit.
 
+### Monitor to File (for automated testing)
+```powershell
+cd "D:\Projects\esp32\esp32_filament_dryer"; .\esp_idf_shell.bat idf.py monitor 2>&1 | Out-File -FilePath "monitor_log.txt" -Encoding utf8
+```
+Or run in background using Start-Process:
+```powershell
+Start-Process -FilePath "powershell" -ArgumentList "-NoExit", "-Command", "cd 'D:\Projects\esp32\esp32_filament_dryer'; .\esp_idf_shell.bat idf.py monitor 2>&1 | Out-File -FilePath 'monitor_log.txt' -Encoding utf8"
+```
+The log file can be read with: `Get-Content monitor_log.txt -Wait -Tail 30`
+
+### Stop Monitor
+```powershell
+# Kill all python processes (most reliable)
+powershell -Command "Get-Process -Name python -ErrorAction SilentlyContinue | Stop-Process -Force"
+
+# Or find and kill specific monitor process
+powershell -Command "Get-Process | Where-Object { $_.CommandLine -like '*idf_monitor*' } | Stop-Process -Force"
+```
+
 ### Full Clean Build
 ```powershell
 cd "D:\Projects\esp32\esp32_filament_dryer"; .\esp_idf_shell.bat idf.py fullclean

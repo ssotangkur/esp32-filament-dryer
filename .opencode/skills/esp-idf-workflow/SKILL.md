@@ -28,6 +28,31 @@ esp_idf_shell.bat idf.py monitor
 - Monitor: `esp_idf_shell.bat idf.py monitor`
 - Full build & flash: `esp_idf_shell.bat idf.py build flash monitor`
 
+#### Monitor to File (for debugging/automated testing)
+Run monitor and redirect output to a file for later inspection:
+```powershell
+cd "D:\Projects\esp32\esp32_filament_dryer"
+.\esp_idf_shell.bat idf.py monitor 2>&1 | Out-File -FilePath "monitor_log.txt" -Encoding utf8
+```
+Or run in background (PowerShell):
+```powershell
+Start-Process -FilePath "powershell" -ArgumentList "-NoExit", "-Command", "cd 'D:\Projects\esp32\esp32_filament_dryer'; .\esp_idf_shell.bat idf.py monitor 2>&1 | Out-File -FilePath 'monitor_log.txt' -Encoding utf8"
+```
+
+View log file in real-time:
+```powershell
+Get-Content monitor_log.txt -Wait -Tail 30
+```
+
+#### Stop Monitor
+```powershell
+# Kill all python processes (most reliable method)
+powershell -Command "Get-Process -Name python -ErrorAction SilentlyContinue | Stop-Process -Force"
+
+# Or find and kill specific monitor process by command line
+powershell -Command "Get-Process | Where-Object { $_.CommandLine -like '*idf_monitor*' } | Stop-Process -Force"
+```
+
 #### Error Prevention:
 Running ESP-IDF commands directly (e.g., `idf.py build`) will result in:
 ```

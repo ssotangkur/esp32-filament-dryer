@@ -26,15 +26,15 @@ struct ws_session_ctx
 
 /**
  * @brief Broadcast temperature data to all connected WebSocket clients
- * @param air_temp Current air temperature reading
- * @param heater_temp Current heater temperature reading
+ * @param sensor Sensor identifier ("air" or "heater")
+ * @param temperature Current temperature reading
  * @note Formats JSON payload and sends to all sessions with completed handshakes
  */
-static void ws_broadcast_temperature(float air_temp, float heater_temp)
+static void ws_broadcast_data(const char *sensor, float temperature)
 {
-  char json_data[256];
-  snprintf(json_data, sizeof(json_data), "[{\"sensor\":\"air\",\"temperature\":%.2f},{\"sensor\":\"heater\",\"temperature\":%.2f}]",
-           air_temp, heater_temp);
+  char json_data[128];
+  snprintf(json_data, sizeof(json_data), "[{\"sensor\":\"%s\",\"temperature\":%.2f,\"timestamp\":%lu}]",
+           sensor, temperature, (unsigned long)(xTaskGetTickCount() * portTICK_PERIOD_MS));
 
   httpd_ws_frame_t ws_resp = {
       .final = true,
@@ -58,28 +58,24 @@ static void ws_broadcast_temperature(float air_temp, float heater_temp)
  * @brief LVGL observer callback for air temperature subject changes
  * @param observer Pointer to the observer (unused)
  * @param subject Pointer to the air temperature subject
- * @note Retrieves current heater temp and broadcasts both temperatures
+ * @note Broadcasts only the air temperature to WebSocket clients
  */
 static void air_temp_subject_callback(lv_observer_t *observer, lv_subject_t *subject)
 {
   float air_temp = lv_subject_get_float(subject);
-  temp_sensor_handle_t heater_sensor = temp_sensor_get_heater_sensor();
-  float heater_temp = temp_sensor_get_reading(heater_sensor);
-  ws_broadcast_temperature(air_temp, heater_temp);
+  ws_broadcast_data("air", air_temp);
 }
 
 /**
  * @brief LVGL observer callback for heater temperature subject changes
  * @param observer Pointer to the observer (unused)
  * @param subject Pointer to the heater temperature subject
- * @note Retrieves current air temp and broadcasts both temperatures
+ * @note Broadcasts only the heater temperature to WebSocket clients
  */
 static void heater_temp_subject_callback(lv_observer_t *observer, lv_subject_t *subject)
 {
   float heater_temp = lv_subject_get_float(subject);
-  temp_sensor_handle_t air_sensor = temp_sensor_get_air_sensor();
-  float air_temp = temp_sensor_get_reading(air_sensor);
-  ws_broadcast_temperature(air_temp, heater_temp);
+  ws_broadcast_data("heater", heater_temp);
 }
 
 /**
@@ -89,6 +85,7 @@ static void heater_temp_subject_callback(lv_observer_t *observer, lv_subject_t *
  */
 static void ws_add_session(ws_session_ctx_t *sess)
 {
+  ESP_LOGI(TAG, "ws_add_session: adding session %p to list", (void *)sess);
   sess->next = g_first_session;
   g_first_session = sess;
 }
@@ -100,16 +97,19 @@ static void ws_add_session(ws_session_ctx_t *sess)
  */
 static void ws_remove_session(ws_session_ctx_t *sess)
 {
+  ESP_LOGI(TAG, "ws_remove_session: removing session %p from list", (void *)sess);
   ws_session_ctx_t **ptr = &g_first_session;
   while (*ptr != NULL)
   {
     if (*ptr == sess)
     {
       *ptr = sess->next;
+      ESP_LOGI(TAG, "ws_remove_session: session %p removed", (void *)sess);
       return;
     }
     ptr = &(*ptr)->next;
   }
+  ESP_LOGW(TAG, "ws_remove_session: session %p not found in list", (void *)sess);
 }
 
 /**
@@ -124,6 +124,7 @@ static esp_err_t get_or_create_session_context(httpd_req_t *req, ws_session_ctx_
   ws_session_ctx_t *sess = (ws_session_ctx_t *)req->sess_ctx;
   if (sess == NULL)
   {
+    ESP_LOGI(TAG, "Creating new session context");
     sess = calloc(1, sizeof(ws_session_ctx_t));
     if (sess == NULL)
     {
@@ -131,9 +132,16 @@ static esp_err_t get_or_create_session_context(httpd_req_t *req, ws_session_ctx_
       *session_out = NULL;
       return ESP_ERR_NO_MEM;
     }
+    sess->sockfd = -1;
     req->sess_ctx = sess;
-    sess->sockfd = httpd_req_to_sockfd(req);
     ws_add_session(sess);
+    ESP_LOGI(TAG, "Session context created at %p", (void *)sess);
+  }
+
+  if (sess->sockfd < 0)
+  {
+    sess->sockfd = httpd_req_to_sockfd(req);
+    ESP_LOGI(TAG, "Assigned sockfd=%d to session %p", sess->sockfd, (void *)sess);
   }
 
   *session_out = sess;
@@ -148,16 +156,30 @@ static esp_err_t get_or_create_session_context(httpd_req_t *req, ws_session_ctx_
  */
 static void cleanup_session_context(httpd_req_t *req, ws_session_ctx_t *sess)
 {
-  if (sess != NULL)
+  if (sess == NULL)
   {
-    ws_remove_session(sess);
-    if (sess->buffer)
-    {
-      free(sess->buffer);
-    }
-    free(sess);
-    req->sess_ctx = NULL;
+    ESP_LOGW(TAG, "cleanup_session_context: sess is NULL");
+    return;
   }
+
+  if (sess->sockfd < 0)
+  {
+    ESP_LOGW(TAG, "cleanup_session_context: sockfd already invalid, possible double-cleanup");
+    return;
+  }
+
+  int sockfd = sess->sockfd;
+  ESP_LOGI(TAG, "cleanup_session_context: removing session from list fd=%d", sockfd);
+
+  ws_remove_session(sess);
+  if (sess->buffer)
+  {
+    free(sess->buffer);
+    sess->buffer = NULL;
+  }
+  sess->sockfd = -1;
+  req->sess_ctx = NULL;
+  ESP_LOGI(TAG, "cleanup_session_context: done fd=%d (HTTP server will free memory)", sockfd);
 }
 
 /**
@@ -185,7 +207,8 @@ void ws_broadcast_latest_sensor_data(void)
 {
   float air_temp = lv_subject_get_float(&g_subject_air_temp);
   float heater_temp = lv_subject_get_float(&g_subject_heater_temp);
-  ws_broadcast_temperature(air_temp, heater_temp);
+  ws_broadcast_data("air", air_temp);
+  ws_broadcast_data("heater", heater_temp);
 }
 
 /**
@@ -273,10 +296,24 @@ esp_err_t sensor_data_handler(httpd_req_t *req)
   }
   else if (ws_pkt.type == HTTPD_WS_TYPE_TEXT)
   {
+    if (ws_pkt.len == 0)
+    {
+      ESP_LOGD(TAG, "Empty WebSocket text frame received");
+      return ESP_OK;
+    }
+
+    if (ws_pkt.len > 256)
+    {
+      ESP_LOGW(TAG, "WebSocket payload too large: %zu", ws_pkt.len);
+      cleanup_session_context(req, sess);
+      return ESP_ERR_INVALID_SIZE;
+    }
+
     ws_pkt.payload = malloc(ws_pkt.len + 1);
     if (ws_pkt.payload == NULL)
     {
       ESP_LOGE(TAG, "Failed to allocate memory for WS payload");
+      cleanup_session_context(req, sess);
       return ESP_ERR_NO_MEM;
     }
 

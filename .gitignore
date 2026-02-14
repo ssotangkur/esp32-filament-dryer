@@ -26,6 +26,7 @@ Thumbs.db
 
 # Temporary files
 temp/
+monitor_log.txt
 
 # ESP-IDF specific
 sdkconfig
