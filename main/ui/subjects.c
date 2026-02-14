@@ -1,5 +1,7 @@
 #include "ui/subjects.h"
 #include "esp_lvgl_port.h"
+#include "esp_log.h"
+#include "web_server.h"
 
 /* Define all subjects */
 lv_subject_t g_subject_heater_temp;
@@ -56,6 +58,7 @@ void subjects_set_heater_temp(float temperature)
     lvgl_port_lock(0);
     lv_subject_set_float(&g_subject_heater_temp, temperature);
     lvgl_port_unlock();
+    ws_broadcast_data("heater", temperature);
 }
 
 void subjects_set_air_temp(float temperature)
@@ -63,6 +66,7 @@ void subjects_set_air_temp(float temperature)
     lvgl_port_lock(0);
     lv_subject_set_float(&g_subject_air_temp, temperature);
     lvgl_port_unlock();
+    ws_broadcast_data("air", temperature);
 }
 
 void subjects_set_heater_power(float power)

@@ -11,6 +11,9 @@ extern httpd_handle_t server;
 // Function to broadcast latest sensor reading to all WebSocket clients
 void ws_broadcast_latest_sensor_data(void);
 
+// Internal function to broadcast temperature data
+void ws_broadcast_data(const char *sensor, float temperature);
+
 esp_err_t web_server_init(void);
 esp_err_t web_server_start(void);
 

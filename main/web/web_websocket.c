@@ -30,11 +30,13 @@ struct ws_session_ctx
  * @param temperature Current temperature reading
  * @note Formats JSON payload and sends to all sessions with completed handshakes
  */
-static void ws_broadcast_data(const char *sensor, float temperature)
+void ws_broadcast_data(const char *sensor, float temperature)
 {
   char json_data[128];
   snprintf(json_data, sizeof(json_data), "[{\"sensor\":\"%s\",\"temperature\":%.2f,\"timestamp\":%lu}]",
            sensor, temperature, (unsigned long)(xTaskGetTickCount() * portTICK_PERIOD_MS));
+
+  ESP_LOGI(TAG, "ws_broadcast_data: broadcasting %s=%.2f to WebSocket clients", sensor, temperature);
 
   httpd_ws_frame_t ws_resp = {
       .final = true,
@@ -43,15 +45,20 @@ static void ws_broadcast_data(const char *sensor, float temperature)
       .payload = (uint8_t *)json_data,
       .len = strlen(json_data)};
 
+  int broadcast_count = 0;
   ws_session_ctx_t *sess = g_first_session;
   while (sess != NULL)
   {
+    ESP_LOGD(TAG, "ws_broadcast_data: checking session %p sockfd=%d handshake_complete=%d",
+             (void *)sess, sess->sockfd, sess->handshake_complete);
     if (sess->handshake_complete)
     {
       httpd_ws_send_frame_async(server, sess->sockfd, &ws_resp);
+      broadcast_count++;
     }
     sess = sess->next;
   }
+  ESP_LOGI(TAG, "ws_broadcast_data: broadcast to %d clients", broadcast_count);
 }
 
 /**
@@ -191,6 +198,7 @@ esp_err_t ws_clients_init(void)
 {
   if (!g_ws_registered)
   {
+    ESP_LOGI(TAG, "Registering WebSocket observers for temperature subjects");
     lv_subject_add_observer(&g_subject_air_temp, air_temp_subject_callback, NULL);
     lv_subject_add_observer(&g_subject_heater_temp, heater_temp_subject_callback, NULL);
     g_ws_registered = true;
@@ -223,8 +231,11 @@ static void send_sensor_data_json(httpd_req_t *req, ws_session_ctx_t *sess)
   float heater_temp = lv_subject_get_float(&g_subject_heater_temp);
 
   char json_data[256];
-  snprintf(json_data, sizeof(json_data), "[{\"sensor\":\"air\",\"temperature\":%.2f},{\"sensor\":\"heater\",\"temperature\":%.2f}]",
-           air_temp, heater_temp);
+  snprintf(json_data, sizeof(json_data), "[{\"sensor\":\"air\",\"temperature\":%.2f,\"timestamp\":%lu},{\"sensor\":\"heater\",\"temperature\":%.2f,\"timestamp\":%lu}]",
+           air_temp, (unsigned long)(xTaskGetTickCount() * portTICK_PERIOD_MS),
+           heater_temp, (unsigned long)(xTaskGetTickCount() * portTICK_PERIOD_MS));
+
+  ESP_LOGI(TAG, "send_sensor_data_json: sending air=%.2f, heater=%.2f", air_temp, heater_temp);
 
   httpd_ws_frame_t ws_resp = {
       .final = true,
