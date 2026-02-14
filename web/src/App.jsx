@@ -5,6 +5,8 @@ import { LineChart } from '@mui/x-charts/LineChart';
 
 const theme = createTheme();
 
+const SLIDING_WINDOW_SIZE = 50;
+
 function App() {
   const [version, setVersion] = useState('Loading...');
   const [airData, setAirData] = useState([]);
@@ -27,9 +29,9 @@ function App() {
       const data = JSON.parse(event.data);
       data.forEach(point => {
         if (point.sensor === 'air') {
-          setAirData(prev => [...prev, { x: point.timestamp, y: point.temperature }]);
+          setAirData(prev => [...prev.slice(-SLIDING_WINDOW_SIZE + 1), { x: point.timestamp, y: point.temperature }]);
         } else if (point.sensor === 'heater') {
-          setHeaterData(prev => [...prev, { x: point.timestamp, y: point.temperature }]);
+          setHeaterData(prev => [...prev.slice(-SLIDING_WINDOW_SIZE + 1), { x: point.timestamp, y: point.temperature }]);
         }
       });
     };
