@@ -53,6 +53,19 @@ Load specialized skills for detailed procedures when working on complex tasks:
 
 **Tip:** Skills provide detailed step-by-step guidance and best practices beyond what's in this file. Load them when you need comprehensive workflows.
 
+## Web Development & Debugging Workflow
+
+**IMPORTANT:** When working with web-related tasks (React app, web server, WebSocket, browser debugging), you MUST read `web/WORKFLOW.md` for project-specific context.
+
+This includes:
+- Device IP address and network configuration
+- WebSocket endpoint details
+- Chrome DevTools MCP commands for debugging
+- Known issues and workarounds
+- Example workflow from past debugging sessions
+
+See `web/WORKFLOW.md` for complete information.
+
 ## Build/Lint/Test Commands
 
 ### Test Commands
