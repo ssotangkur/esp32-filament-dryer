@@ -24,8 +24,8 @@ ESP-IDF build, flash, monitor, clean, fullclean, and reconfigure operations.
 **Required for:** All ESP-IDF command execution.
 
 ### @git_commit_assistant subagent (CRITICAL)
-Analyzes changes and creates appropriate commit messages following project conventions.
-**Usage:** `@git_commit_assistant please commit these changes`
+Analyzes changes and creates appropriate commit messages following project conventions. Automatically runs `git status`, `git diff`, and `git log` to analyze changes.
+**Usage:** `@git_commit_assistant please commit - describe what changed`
 **Required for:** All git commits (see p.X).
 
 ### @ui_simulator subagent
