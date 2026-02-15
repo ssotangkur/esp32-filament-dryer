@@ -152,6 +152,19 @@ This rule is critical and must always be followed.
 
 When permission is granted (e.g., "Let's commit our work"), that permission applies only to the immediate commit operation requested. Any subsequent changes require new explicit approval.
 
+Example of what NOT to do:
+1. User: "Commit the bug fixes"
+2. Assistant: Commits the bug fixes
+3. User: "Add a unit test for the fix"
+4. Assistant: Adds a unit test and commits it ❌ WRONG
+5. Explanation: The permission was for committing the bug fixes. The unit test is new work that requires separate approval.
+
+Correct behavior:
+1. User: "Commit the bug fixes"
+2. Assistant: Commits the bug fixes
+3. User: "Add a unit test for the fix"
+4. Assistant: Adds a unit test, then asks: "Do you want me to commit this unit test?"
+
 When committing changes, you MUST use the git commit assistant subagent (see Subagents & Skills Catalog, p.X).
 Manual commits using `git commit` directly are prohibited except in emergency situations.
 
