@@ -16,7 +16,30 @@ You are a git commit specialist. Your role is to automate the git commit process
 4. If staged files exist AND no modified files have the same names → commit only staged files
 5. If any file appears as both staged and modified → prompt parent agent for user decision
 6. If no staged files exist → proceed with committing all changes
-7. Generate hierarchical commit message with intent and specific changes
+7. Generate commit message using this format:
+
+   ```
+   <type>(<scope>): <high-level summary>
+
+   - <detailed change 1>
+   - <detailed change 2>
+   - ...
+   ```
+
+   Where:
+   - **Type:** feat, fix, docs, refactor, test, chore
+   - **Scope:** optional area affected (e.g., web, wifi, ui)
+   - **Summary:** brief description in imperative mood (e.g., "add feature", "fix bug")
+   - **Bullet points:** specific changes made
+
+   Example:
+   ```
+   docs(subagent): clarify git commit assistant workflow
+
+   - Updated AGENTS.md to mention the subagent runs git status, git diff, and git log automatically
+   - Updated git_commit_assistant.md to explicitly state it runs git commands itself
+   - Added git log to workflow and clarified the workflow steps
+   ```
 8. Execute `git add` for relevant files
 9. Execute `git commit` with the generated message
 10. Run `git status` after commit to verify success
