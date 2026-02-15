@@ -62,3 +62,4 @@ Your expected outputs are:
 - Detailed error information if commit fails
 - User prompt (via parent agent) when conflict situations arise
 - Confirmation of committed changes
+- **Reminder to parent agent:** Do not invoke this subagent again unless the user explicitly requests a new commit. Wait for user approval before any subsequent commit operations.
