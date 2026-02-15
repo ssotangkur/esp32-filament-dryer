@@ -4,9 +4,9 @@
 #include "circular_buffer.h"
 #include "temp.h"
 #include "ui/subjects.h"
+#include "wifi.h"
 #include <string.h>
 #include <stdlib.h>
-#include <time.h>
 
 static const char *TAG = "web_server";
 
@@ -34,8 +34,8 @@ struct ws_session_ctx
 void ws_broadcast_data(const char *sensor, float temperature)
 {
   char json_data[128];
-  snprintf(json_data, sizeof(json_data), "[{\"sensor\":\"%s\",\"temperature\":%.2f,\"timestamp\":%lu}]",
-           sensor, temperature, (unsigned long)time(NULL));
+  snprintf(json_data, sizeof(json_data), "[{\"sensor\":\"%s\",\"temperature\":%.2f,\"timestamp\":%llu}]",
+           sensor, temperature, (unsigned long long)wifi_get_epoch_ms());
 
   ESP_LOGI(TAG, "ws_broadcast_data: broadcasting %s=%.2f to WebSocket clients", sensor, temperature);
 
@@ -230,11 +230,12 @@ static void send_sensor_data_json(httpd_req_t *req, ws_session_ctx_t *sess)
 {
   float air_temp = lv_subject_get_float(&g_subject_air_temp);
   float heater_temp = lv_subject_get_float(&g_subject_heater_temp);
+  uint64_t epoch_ms = wifi_get_epoch_ms();
 
   char json_data[256];
-  snprintf(json_data, sizeof(json_data), "[{\"sensor\":\"air\",\"temperature\":%.2f,\"timestamp\":%lu},{\"sensor\":\"heater\",\"temperature\":%.2f,\"timestamp\":%lu}]",
-           air_temp, (unsigned long)time(NULL),
-           heater_temp, (unsigned long)time(NULL));
+  snprintf(json_data, sizeof(json_data), "[{\"sensor\":\"air\",\"temperature\":%.2f,\"timestamp\":%llu},{\"sensor\":\"heater\",\"temperature\":%.2f,\"timestamp\":%llu}]",
+           air_temp, (unsigned long long)epoch_ms,
+           heater_temp, (unsigned long long)epoch_ms);
 
   ESP_LOGI(TAG, "send_sensor_data_json: sending air=%.2f, heater=%.2f", air_temp, heater_temp);
 

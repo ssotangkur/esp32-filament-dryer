@@ -3,6 +3,7 @@
 #include "esp_event.h"
 #include "esp_log.h"
 #include "esp_sntp.h"
+#include "esp_timer.h"
 #include "nvs_flash.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
@@ -19,6 +20,10 @@ static EventGroupHandle_t wifi_event_group;
 // WiFi retry variables
 static int wifi_retry_count = 0;
 static const int MAX_WIFI_RETRIES = 5;
+
+// Epoch time tracking for millisecond precision
+static time_t g_epoch_seconds = 0;
+static int64_t g_boot_time_us = 0;
 
 // Event handler for WiFi events
 static void wifi_event_handler(void *arg, esp_event_base_t event_base,
@@ -90,14 +95,27 @@ void wifi_sync_time(void)
 
   if (timeinfo.tm_year >= (2025 - 1900))
   {
-    char time_str[64];
-    strftime(time_str, sizeof(time_str), "%Y-%m-%d %H:%M:%S %Z", &timeinfo);
-    ESP_LOGI(TAG, "Time synchronized: %s", time_str);
+    // Capture epoch seconds and boot time for millisecond precision
+    g_epoch_seconds = now;
+    g_boot_time_us = esp_timer_get_time();
+    ESP_LOGI(TAG, "Time synchronized: epoch_sec=%lld, boot_us=%lld", (int64_t)g_epoch_seconds, g_boot_time_us);
   }
   else
   {
     ESP_LOGW(TAG, "NTP sync timed out, time may be inaccurate");
   }
+}
+
+// Get current time as milliseconds since epoch
+uint64_t wifi_get_epoch_ms(void)
+{
+  if (g_epoch_seconds == 0)
+  {
+    return 0; // NTP not synced yet
+  }
+  int64_t elapsed_us = esp_timer_get_time() - g_boot_time_us;
+  uint64_t epoch_ms = ((uint64_t)g_epoch_seconds * 1000) + (elapsed_us / 1000);
+  return epoch_ms;
 }
 
 // Initialize WiFi in station mode

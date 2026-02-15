@@ -11,7 +11,7 @@ const DEVICE_IP = import.meta.env.VITE_DEVICE_IP || '192.168.2.18';
 const WS_PORT = import.meta.env.VITE_WS_PORT || '3000';
 
 function formatTime(timestamp) {
-  return new Date(timestamp * 1000).toLocaleTimeString();
+  return new Date(timestamp).toLocaleTimeString();
 }
 
 function App() {
