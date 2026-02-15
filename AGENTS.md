@@ -26,7 +26,7 @@ ESP-IDF build, flash, monitor, clean, fullclean, and reconfigure operations.
 ### @git_commit_assistant subagent (CRITICAL)
 Analyzes changes and creates appropriate commit messages following project conventions. Automatically runs `git status`, `git diff`, and `git log` to analyze changes.
 **Usage:** `@git_commit_assistant please commit - describe what changed`
-**Required for:** All git commits (see p.X).
+**Always delegate to this subagent** when the user requests a commit, even if they specify which files or provide commit message details.
 
 ### @ui_simulator subagent
 Builds the UI simulator using Docker and Emscripten for WebAssembly testing.
