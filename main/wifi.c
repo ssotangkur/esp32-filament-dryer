@@ -2,10 +2,12 @@
 #include "esp_wifi.h"
 #include "esp_event.h"
 #include "esp_log.h"
+#include "esp_sntp.h"
 #include "nvs_flash.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
 #include <string.h>
+#include <time.h>
 
 static const char *TAG = "wifi";
 
@@ -53,6 +55,51 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base,
     ESP_LOGI(TAG, "Got IP: " IPSTR, IP2STR(&event->ip_info.ip));
     wifi_retry_count = 0; // Reset retry count on successful connection
     xEventGroupSetBits(wifi_event_group, WIFI_CONNECTED_BIT);
+
+    // Sync time from NTP (DHCP or fallback servers)
+    wifi_sync_time();
+  }
+}
+
+// Sync time using NTP with fallback servers
+void wifi_sync_time(void)
+{
+  ESP_LOGI(TAG, "Starting NTP time sync...");
+
+  // Configure NTP servers - try multiple public NTP servers for reliability
+  // Using pool.ntp.org anycast servers which are widely available
+  esp_sntp_setservername(0, "pool.ntp.org");
+  esp_sntp_setservername(1, "time.google.com");
+  esp_sntp_setservername(2, "time.cloudflare.com");
+
+  ESP_LOGI(TAG, "NTP servers configured: pool.ntp.org, time.google.com, time.cloudflare.com");
+
+  // Initialize SNTP
+  esp_sntp_init();
+
+  // Wait for time sync with timeout
+  time_t now = 0;
+  struct tm timeinfo = {0};
+  int retry_count = 0;
+  const int max_retries = 20;
+
+  while (timeinfo.tm_year < (2025 - 1900) && retry_count < max_retries)
+  {
+    vTaskDelay(pdMS_TO_TICKS(500));
+    time(&now);
+    localtime_r(&now, &timeinfo);
+    retry_count++;
+  }
+
+  if (timeinfo.tm_year >= (2025 - 1900))
+  {
+    char time_str[64];
+    strftime(time_str, sizeof(time_str), "%Y-%m-%d %H:%M:%S %Z", &timeinfo);
+    ESP_LOGI(TAG, "Time synchronized: %s", time_str);
+  }
+  else
+  {
+    ESP_LOGW(TAG, "NTP sync timed out, time may be inaccurate");
   }
 }
 

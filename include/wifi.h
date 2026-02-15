@@ -7,6 +7,7 @@
 esp_err_t wifi_init(void);
 esp_err_t wifi_connect(void);
 esp_err_t wifi_wait_for_connection(void);
+void wifi_sync_time(void);
 
 // Get current IP address as string (returns empty string if not connected)
 // Caller must provide buffer of at least 16 characters
