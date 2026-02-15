@@ -55,9 +55,6 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base,
     ESP_LOGI(TAG, "Got IP: " IPSTR, IP2STR(&event->ip_info.ip));
     wifi_retry_count = 0; // Reset retry count on successful connection
     xEventGroupSetBits(wifi_event_group, WIFI_CONNECTED_BIT);
-
-    // Sync time from NTP (DHCP or fallback servers)
-    wifi_sync_time();
   }
 }
 

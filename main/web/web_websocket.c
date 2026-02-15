@@ -6,6 +6,7 @@
 #include "ui/subjects.h"
 #include <string.h>
 #include <stdlib.h>
+#include <time.h>
 
 static const char *TAG = "web_server";
 
@@ -34,7 +35,7 @@ void ws_broadcast_data(const char *sensor, float temperature)
 {
   char json_data[128];
   snprintf(json_data, sizeof(json_data), "[{\"sensor\":\"%s\",\"temperature\":%.2f,\"timestamp\":%lu}]",
-           sensor, temperature, (unsigned long)(xTaskGetTickCount() * portTICK_PERIOD_MS));
+           sensor, temperature, (unsigned long)time(NULL));
 
   ESP_LOGI(TAG, "ws_broadcast_data: broadcasting %s=%.2f to WebSocket clients", sensor, temperature);
 
@@ -232,8 +233,8 @@ static void send_sensor_data_json(httpd_req_t *req, ws_session_ctx_t *sess)
 
   char json_data[256];
   snprintf(json_data, sizeof(json_data), "[{\"sensor\":\"air\",\"temperature\":%.2f,\"timestamp\":%lu},{\"sensor\":\"heater\",\"temperature\":%.2f,\"timestamp\":%lu}]",
-           air_temp, (unsigned long)(xTaskGetTickCount() * portTICK_PERIOD_MS),
-           heater_temp, (unsigned long)(xTaskGetTickCount() * portTICK_PERIOD_MS));
+           air_temp, (unsigned long)time(NULL),
+           heater_temp, (unsigned long)time(NULL));
 
   ESP_LOGI(TAG, "send_sensor_data_json: sending air=%.2f, heater=%.2f", air_temp, heater_temp);
 

@@ -31,6 +31,9 @@ void app_main(void)
     ESP_ERROR_CHECK(wifi_connect());
     ESP_ERROR_CHECK(wifi_wait_for_connection());
 
+    // Sync time from NTP before starting sensors (ensures accurate timestamps)
+    wifi_sync_time();
+
     // Initialize web server
     ESP_ERROR_CHECK(web_server_init());
 

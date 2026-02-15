@@ -10,6 +10,10 @@ const SLIDING_WINDOW_SIZE = 50;
 const DEVICE_IP = import.meta.env.VITE_DEVICE_IP || '192.168.2.18';
 const WS_PORT = import.meta.env.VITE_WS_PORT || '3000';
 
+function formatTime(timestamp) {
+  return new Date(timestamp * 1000).toLocaleTimeString();
+}
+
 function App() {
   const [version, setVersion] = useState('Loading...');
   const [airData, setAirData] = useState([]);
@@ -102,7 +106,7 @@ function App() {
           <Typography variant="h6" gutterBottom>Air Temperature</Typography>
           {airData.length > 0 ? (
             <LineChart
-              xAxis={[{ dataKey: 'x', type: 'number' }]}
+              xAxis={[{ dataKey: 'x', type: 'number', valueFormatter: formatTime }]}
               series={[{ dataKey: 'y', label: 'Air (°C)' }]}
               dataset={airData}
               width={500}
@@ -117,7 +121,7 @@ function App() {
           <Typography variant="h6" gutterBottom>Heater Temperature</Typography>
           {heaterData.length > 0 ? (
             <LineChart
-              xAxis={[{ dataKey: 'x', type: 'number' }]}
+              xAxis={[{ dataKey: 'x', type: 'number', valueFormatter: formatTime }]}
               series={[{ dataKey: 'y', label: 'Heater (°C)' }]}
               dataset={heaterData}
               width={500}
