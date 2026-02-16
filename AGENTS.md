@@ -147,7 +147,8 @@ This project runs on Windows 11 with PowerShell:
 
 ## Git Commit Safety Requirements (CRITICAL)
 NEVER commit changes automatically without explicit user approval.
-Always wait for explicit "commit", "yes", "go ahead", "commit now", or "please commit" before running `git commit`.
+Always wait for explicit "commit", "yes", "go ahead", "commit now", or "please commit" before running `@git_commit_assistant`.
+After a successful commit you MUST ALWAYS wait for another explicit approval before invoking the `@git_commit_assistant` again.
 This rule is critical and must always be followed.
 
 When permission is granted (e.g., "Let's commit our work"), that permission applies only to the immediate commit operation requested. Any subsequent changes require new explicit approval.
