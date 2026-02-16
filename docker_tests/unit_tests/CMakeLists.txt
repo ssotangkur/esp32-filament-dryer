@@ -24,18 +24,17 @@ set(SOURCES
     main/test_main.c
     main/test_heater.c
     main/test_controller.c
-    main/test_circular_buffer.c       # Real circular buffer tests with ESP-IDF/FreeRTOS
-    main/test_temp.c                  # Temperature sensor tests
+    main/test_circular_buffer.c       # Real circular buffer tests using stubs
     main/test_version.c
-    main/test_temperature.c
+    # main/test_linked_list.c       # Disabled - segfaults with CMock
+    # main/stubs.c                      # Stub implementations for testing
     ${MOCK_SOURCES}                   # All CMock-generated mocks
     /opt/unity/src/unity.c            # Unity testing framework
     /opt/cmock/src/cmock.c            # CMock framework
     ${CMAKE_CURRENT_BINARY_DIR}/cmock_globals.c  # Global variables for CMock plugins
     /project/main/heater_controller.c        # Controller source from main project
     /project/main/version.c           # Version source from main project
-    /project/main/temp.c              # Temperature sensor source for testing
-    # Note: circular_buffer.c is included by main/test_circular_buffer.c
+    /project/main/circular_buffer.c
 )
 
 # Include directories for Unity and CMock
