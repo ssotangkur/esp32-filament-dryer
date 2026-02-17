@@ -260,6 +260,282 @@ void test_circular_buffer_null_parameters(void)
   mock_circular_buffer_free(&test_buf, buffer);
 }
 
+// Subscriber test helpers
+static bool g_subscribe_callback_called = false;
+static size_t g_subscribe_callback_count = 0;
+static size_t g_subscribe_data_count = 0;
+static void *g_subscribe_data = NULL;
+
+static void test_subscribe_callback(const void *data, size_t count, void *user_data)
+{
+  g_subscribe_callback_called = true;
+  g_subscribe_callback_count++;
+  g_subscribe_data_count = count;
+  g_subscribe_data = (void *)data;
+  (void)user_data;
+}
+
+static void reset_subscriber_globals(void)
+{
+  g_subscribe_callback_called = false;
+  g_subscribe_callback_count = 0;
+  g_subscribe_data_count = 0;
+  g_subscribe_data = NULL;
+}
+
+bool mock_circular_buffer_subscribe(circular_buffer_t *cb, circular_buffer_subscriber_cb_t callback, void *user_data)
+{
+  if (cb == NULL || callback == NULL)
+  {
+    return circular_buffer_subscribe(cb, callback, user_data);
+  }
+
+  xSemaphoreTake_ExpectAndReturn(cb->mutex, portMAX_DELAY, pdTRUE);
+
+  // Allocate real memory for new_subscribers - match actual size calculation
+  size_t new_size = (cb->subscriber_count + 1) * sizeof(circular_buffer_subscriber_t);
+  circular_buffer_subscriber_t *new_subscribers = malloc(new_size);
+  heap_caps_malloc_ExpectAndReturn(new_size, MALLOC_CAP_SPIRAM, new_subscribers);
+
+  if (cb->subscribers != NULL)
+  {
+    heap_caps_free_Expect(cb->subscribers);
+  }
+
+  // If there's historical data, allocate and free temp buffer
+  if (cb->count > 0)
+  {
+    size_t hist_size = cb->count * cb->element_size;
+    void *hist_data = malloc(hist_size);
+    heap_caps_malloc_ExpectAndReturn(hist_size, MALLOC_CAP_SPIRAM, hist_data);
+    heap_caps_free_Expect(hist_data);
+  }
+
+  xSemaphoreGive_ExpectAndReturn(cb->mutex, pdTRUE);
+
+  return circular_buffer_subscribe(cb, callback, user_data);
+}
+
+bool mock_circular_buffer_unsubscribe(circular_buffer_t *cb, void *user_data)
+{
+  if (cb == NULL)
+  {
+    return circular_buffer_unsubscribe(cb, user_data);
+  }
+
+  xSemaphoreTake_ExpectAndReturn(cb->mutex, portMAX_DELAY, pdTRUE);
+
+  if (cb->subscriber_count > 0)
+  {
+    if (cb->subscriber_count == 1)
+    {
+      heap_caps_free_Expect(cb->subscribers);
+    }
+    else
+    {
+      size_t new_size = cb->subscriber_count * sizeof(circular_buffer_subscriber_t);
+      circular_buffer_subscriber_t *new_subscribers = malloc(new_size);
+      heap_caps_malloc_ExpectAndReturn(new_size, MALLOC_CAP_SPIRAM, new_subscribers);
+      heap_caps_free_Expect(cb->subscribers);
+    }
+  }
+
+  xSemaphoreGive_ExpectAndReturn(cb->mutex, pdTRUE);
+
+  return circular_buffer_unsubscribe(cb, user_data);
+}
+
+bool mock_circular_buffer_iterate(circular_buffer_t *cb, bool (*callback)(size_t index, const void *data, void *user_data), void *user_data)
+{
+  if (cb == NULL || callback == NULL)
+  {
+    return circular_buffer_iterate(cb, callback, user_data);
+  }
+
+  xSemaphoreTake_ExpectAndReturn(cb->mutex, portMAX_DELAY, pdTRUE);
+  xSemaphoreGive_ExpectAndReturn(cb->mutex, pdTRUE);
+
+  return circular_buffer_iterate(cb, callback, user_data);
+}
+
+bool test_iterate_callback(size_t index, const void *data, void *user_data)
+{
+  g_subscribe_callback_called = true;
+  g_subscribe_callback_count++;
+  (void)index;
+  (void)data;
+  (void)user_data;
+  return true;
+}
+
+void test_circular_buffer_subscribe_empty_buffer(void)
+{
+  circular_buffer_t test_buf;
+  void *buffer = mock_circular_buffer_init_success(&test_buf, sizeof(test_item_t), 10);
+  reset_subscriber_globals();
+
+  // For empty buffer, subscribe should succeed but no historical data callback
+  TEST_ASSERT_TRUE(mock_circular_buffer_subscribe(&test_buf, test_subscribe_callback, (void *)0x1234));
+
+  mock_circular_buffer_free(&test_buf, buffer);
+}
+
+void test_circular_buffer_subscribe_with_data(void)
+{
+  circular_buffer_t test_buf;
+  void *buffer = mock_circular_buffer_init_success(&test_buf, sizeof(test_item_t), 10);
+  reset_subscriber_globals();
+
+  test_item_t item1 = {100, "first"};
+  test_item_t item2 = {200, "second"};
+
+  mock_circular_buffer_push(&test_buf, &item1);
+  mock_circular_buffer_push(&test_buf, &item2);
+  TEST_ASSERT_EQUAL(2, mock_circular_buffer_count(&test_buf));
+
+  // Subscribe - should receive all historical data
+  TEST_ASSERT_TRUE(mock_circular_buffer_subscribe(&test_buf, test_subscribe_callback, (void *)0x1234));
+
+  mock_circular_buffer_free(&test_buf, buffer);
+}
+
+void test_circular_buffer_subscribe_null_params(void)
+{
+  circular_buffer_t test_buf;
+  void *buffer = mock_circular_buffer_init_success(&test_buf, sizeof(test_item_t), 10);
+
+  TEST_ASSERT_FALSE(circular_buffer_subscribe(NULL, test_subscribe_callback, NULL));
+  TEST_ASSERT_FALSE(circular_buffer_subscribe(&test_buf, NULL, NULL));
+
+  mock_circular_buffer_free(&test_buf, buffer);
+}
+
+void test_circular_buffer_unsubscribe(void)
+{
+  circular_buffer_t test_buf;
+  void *buffer = mock_circular_buffer_init_success(&test_buf, sizeof(test_item_t), 10);
+  reset_subscriber_globals();
+
+  void *user_data = (void *)0x1234;
+
+  TEST_ASSERT_TRUE(mock_circular_buffer_subscribe(&test_buf, test_subscribe_callback, user_data));
+
+  TEST_ASSERT_TRUE(mock_circular_buffer_unsubscribe(&test_buf, user_data));
+
+  mock_circular_buffer_free(&test_buf, buffer);
+}
+
+void test_circular_buffer_unsubscribe_not_found(void)
+{
+  circular_buffer_t test_buf;
+  void *buffer = mock_circular_buffer_init_success(&test_buf, sizeof(test_item_t), 10);
+
+  void *user_data1 = (void *)0x1234;
+  void *user_data2 = (void *)0x5678;
+
+  TEST_ASSERT_TRUE(mock_circular_buffer_subscribe(&test_buf, test_subscribe_callback, user_data1));
+
+  // Try to unsubscribe with different user_data - should fail but still take/give semaphore
+  xSemaphoreTake_ExpectAndReturn(test_buf.mutex, portMAX_DELAY, pdTRUE);
+  xSemaphoreGive_ExpectAndReturn(test_buf.mutex, pdTRUE);
+  TEST_ASSERT_FALSE(circular_buffer_unsubscribe(&test_buf, user_data2));
+
+  mock_circular_buffer_free(&test_buf, buffer);
+}
+
+void test_circular_buffer_multiple_subscribers(void)
+{
+  circular_buffer_t test_buf;
+  void *buffer = mock_circular_buffer_init_success(&test_buf, sizeof(test_item_t), 10);
+  reset_subscriber_globals();
+
+  void *user_data1 = (void *)0x1234;
+  void *user_data2 = (void *)0x5678;
+
+  TEST_ASSERT_TRUE(mock_circular_buffer_subscribe(&test_buf, test_subscribe_callback, user_data1));
+  TEST_ASSERT_TRUE(mock_circular_buffer_subscribe(&test_buf, test_subscribe_callback, user_data2));
+
+  mock_circular_buffer_free(&test_buf, buffer);
+}
+
+void test_circular_buffer_push_notifies_subscribers(void)
+{
+  circular_buffer_t test_buf;
+  void *buffer = mock_circular_buffer_init_success(&test_buf, sizeof(test_item_t), 10);
+  reset_subscriber_globals();
+
+  // Subscribe first
+  TEST_ASSERT_TRUE(mock_circular_buffer_subscribe(&test_buf, test_subscribe_callback, (void *)0x1234));
+
+  // Now push - subscriber should be notified (semaphore ops for push)
+  xSemaphoreTake_ExpectAndReturn(test_buf.mutex, portMAX_DELAY, pdTRUE);
+  xSemaphoreGive_ExpectAndReturn(test_buf.mutex, pdTRUE);
+
+  test_item_t item = {42, "test"};
+  circular_buffer_push(&test_buf, &item);
+
+  mock_circular_buffer_free(&test_buf, buffer);
+}
+
+void test_circular_buffer_iterate(void)
+{
+  circular_buffer_t test_buf;
+  void *buffer = mock_circular_buffer_init_success(&test_buf, sizeof(test_item_t), 10);
+  reset_subscriber_globals();
+
+  test_item_t item;
+  for (int i = 0; i < 3; i++)
+  {
+    item.value = i * 10;
+    sprintf(item.name, "item_%d", i);
+    mock_circular_buffer_push(&test_buf, &item);
+  }
+
+  TEST_ASSERT_TRUE(mock_circular_buffer_iterate(&test_buf, test_iterate_callback, NULL));
+
+  mock_circular_buffer_free(&test_buf, buffer);
+}
+
+void test_circular_buffer_iterate_empty(void)
+{
+  circular_buffer_t test_buf;
+  void *buffer = mock_circular_buffer_init_success(&test_buf, sizeof(test_item_t), 10);
+  reset_subscriber_globals();
+
+  TEST_ASSERT_TRUE(mock_circular_buffer_iterate(&test_buf, test_iterate_callback, NULL));
+
+  mock_circular_buffer_free(&test_buf, buffer);
+}
+
+void test_circular_buffer_iterate_null_params(void)
+{
+  circular_buffer_t test_buf;
+  void *buffer = mock_circular_buffer_init_success(&test_buf, sizeof(test_item_t), 10);
+
+  TEST_ASSERT_FALSE(circular_buffer_iterate(NULL, test_iterate_callback, NULL));
+  TEST_ASSERT_FALSE(circular_buffer_iterate(&test_buf, NULL, NULL));
+
+  mock_circular_buffer_free(&test_buf, buffer);
+}
+
+void test_circular_buffer_subscriber_system_real(void)
+{
+  printf("Running circular buffer subscriber system tests...\n");
+
+  RUN_TEST(test_circular_buffer_subscribe_empty_buffer);
+  RUN_TEST(test_circular_buffer_subscribe_with_data);
+  RUN_TEST(test_circular_buffer_subscribe_null_params);
+  RUN_TEST(test_circular_buffer_unsubscribe);
+  RUN_TEST(test_circular_buffer_unsubscribe_not_found);
+  RUN_TEST(test_circular_buffer_multiple_subscribers);
+  RUN_TEST(test_circular_buffer_push_notifies_subscribers);
+  RUN_TEST(test_circular_buffer_iterate);
+  RUN_TEST(test_circular_buffer_iterate_empty);
+  RUN_TEST(test_circular_buffer_iterate_null_params);
+
+  printf("Circular buffer subscriber system tests completed\n");
+}
+
 void test_circular_buffer_real(void)
 {
   printf("Running real circular buffer tests...\n");

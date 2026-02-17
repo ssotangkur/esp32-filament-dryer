@@ -4,6 +4,7 @@
 
 // Test function declarations
 void test_circular_buffer_real(void);
+void test_circular_buffer_subscriber_system_real(void);
 // void test_temp(void);              // Disabled: requires temp.c with many dependencies (ui/subjects.c, etc.)
 void test_version(void);
 // void test_temperature(void);        // Disabled: test_temperature.c not compiled (standalone, can be re-enabled)
@@ -31,6 +32,7 @@ int main(int argc, char *argv[])
   // Run all test groups
   test_linked_list_all();
   test_circular_buffer_real();
+  test_circular_buffer_subscriber_system_real();
   // test_temp();         // Disabled: requires temp.c with many dependencies
   test_version();
   // test_temperature();  // Disabled: test file not compiled

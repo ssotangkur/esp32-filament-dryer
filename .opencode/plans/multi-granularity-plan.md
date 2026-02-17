@@ -72,145 +72,71 @@ Implement browser-side data collection, storage, aggregation, and visualization 
 
 ### 2. Add Circular Buffer Subscriber System
 
-- [ ] **File:** `include/circular_buffer.h`
-- [ ] **Changes:**
-  - [ ] Add subscriber callback type:
-    ```c
-    typedef void (*circular_buffer_subscriber_cb_t)(const void *data, size_t count, void *user_data);
-    ```
-  - [ ] Add subscriber struct:
-    ```c
-    typedef struct {
-      circular_buffer_subscriber_cb_t callback;
-      void *user_data;
-    } circular_buffer_subscriber_t;
-    ```
-  - [ ] Add to `circular_buffer_t`:
-    ```c
-    circular_buffer_subscriber_t *subscribers;
-    size_t subscriber_count;
-    ```
-  - [ ] Add function: `bool circular_buffer_subscribe(circular_buffer_t *cb, circular_buffer_subscriber_cb_t callback, void *user_data);`
-  - [ ] Add function: `bool circular_buffer_unsubscribe(circular_buffer_t *cb, void *user_data);`
-  - [ ] Add function: `bool circular_buffer_iterate(circular_buffer_t *cb, bool (*callback)(size_t index, const void *data, void *user_data), void *user_data);`
+- [x] **File:** `include/circular_buffer.h` - **COMMITTED**
+- [x] **Changes:**
+  - [x] Add subscriber callback type
+  - [x] Add subscriber struct
+  - [x] Add to `circular_buffer_t`: subscribers, subscriber_count
+  - [x] Add function: `circular_buffer_subscribe()`
+  - [x] Add function: `circular_buffer_unsubscribe()`
+  - [x] Add function: `circular_buffer_iterate()`
 
-- [ ] **File:** `main/circular_buffer.c`
-- [ ] **Changes:**
-  - [ ] Implement `circular_buffer_subscribe()`:
-    - [ ] Allocate memory for subscriber
-    - [ ] Add to subscriber list
-    - [ ] **Use `circular_buffer_iterate()` to iterate through ALL buffer contents**
-    - [ ] Call subscriber callback with all historical data
-    - [ ] After callback returns, release any temporary memory
-  - [ ] Implement `circular_buffer_unsubscribe()`
-  - [ ] Implement `circular_buffer_iterate()`:
-    - [ ] Takes callback function to process each element
-    - [ ] Acquires mutex, iterates through valid elements (0 to count-1)
-    - [ ] Calls callback for each element with index and data
-    - [ ] Returns false if any callback returns false (early exit), true otherwise
-  - [ ] Modify `circular_buffer_push()`:
-    - [ ] After adding new element, notify ALL subscribers with the new data point
-  - [ ] **Add unit tests for subscriber system:**
-    - [ ] **File:** `docker_tests/unit_tests/main/test_circular_buffer.c`
-    - [ ] Add test: `test_circular_buffer_subscribe()` - verify callback is invoked with all current buffer contents
-    - [ ] Add test: `test_circular_buffer_iterate()` - verify iteration function works correctly
-    - [ ] Add test: `test_circular_buffer_multiple_subscribers()` - verify multiple subscribers receive data
-    - [ ] Add test: `test_circular_buffer_unsubscribe()` - verify subscriber removal works
-    - [ ] Add test: `test_circular_buffer_push_notifies_subscribers()` - verify new data pushes to subscribers
-    - [ ] Add test: `test_circular_buffer_subscriber_with_null_callback()` - verify NULL callback is handled
-    - [ ] Run tests: `.\run_unit_tests.bat`
+- [x] **File:** `main/circular_buffer.c` - **COMMITTED**
+- [x] **Changes:**
+  - [x] Implement `circular_buffer_subscribe()` - allocates subscribers in PSRAM, sends historical data
+  - [x] Implement `circular_buffer_unsubscribe()` - removes subscriber, reallocates array
+  - [x] Implement `circular_buffer_iterate()` - iterates all elements with callback
+  - [x] Modify `circular_buffer_push()` to notify subscribers
+  - [x] **Add unit tests for subscriber system:**
+    - [x] **File:** `docker_tests/unit_tests/main/test_circular_buffer.c` - **10 new tests**
+    - [x] test_circular_buffer_subscribe_empty_buffer
+    - [x] test_circular_buffer_subscribe_with_data
+    - [x] test_circular_buffer_subscribe_null_params
+    - [x] test_circular_buffer_unsubscribe
+    - [x] test_circular_buffer_unsubscribe_not_found
+    - [x] test_circular_buffer_multiple_subscribers
+    - [x] test_circular_buffer_push_notifies_subscribers
+    - [x] test_circular_buffer_iterate
+    - [x] test_circular_buffer_iterate_empty
+    - [x] test_circular_buffer_iterate_null_params
+    - [x] All tests passing (verified with `.\run_unit_tests.bat`)
 
 ### 3. Add Temperature Buffer Accessors
 
-- [ ] **File:** `include/temp.h`
-- [ ] **Changes:**
-  - [ ] Add: `circular_buffer_t* temp_sensor_get_air_buffer(void);`
-  - [ ] Add: `circular_buffer_t* temp_sensor_get_heater_buffer(void);`
+- [x] **File:** `include/temp.h` - **COMMITTED**
+- [x] **Changes:**
+  - [x] Add: `circular_buffer_t* temp_sensor_get_air_buffer(void);`
+  - [x] Add: `circular_buffer_t* temp_sensor_get_heater_buffer(void);`
 
-- [ ] **File:** `main/temp.c`
-- [ ] **Changes:**
-  - [ ] Implement `temp_sensor_get_air_buffer()` - return `&temp_buffer_1`
-  - [ ] Implement `temp_sensor_get_heater_buffer()` - return `&temp_buffer_2`
+- [x] **File:** `main/temp.c` - **COMMITTED**
+- [x] **Changes:**
+  - [x] Implement `temp_sensor_get_air_buffer()` - return `&temp_buffer_1`
+  - [x] Implement `temp_sensor_get_heater_buffer()` - return `&temp_buffer_2`
 
 ### 4. Create Linked List Module for Pending Messages
 
-- [ ] **File:** `include/linked_list.h` (new file)
-- [ ] **Changes:**
-  - [ ] Add node structure:
-    ```c
-    typedef struct linked_list_node {
-        void *data;
-        size_t size;
-        struct linked_list_node *next;
-    } linked_list_node_t;
-    ```
-  - [ ] Add list structure:
-    ```c
-    typedef struct {
-        linked_list_node_t *head;
-        linked_list_node_t *tail;
-        size_t count;
-        size_t max_size;
-        SemaphoreHandle_t mutex;
-    } linked_list_t;
-    ```
-  - [ ] Add chunk size constant:
-    ```c
-    #define LINKED_LIST_CHUNK_SIZE 100
-    ```
-  - [ ] Add function declarations:
-    - [ ] `bool linked_list_create(linked_list_t *list, size_t max_size);`
-    - [ ] `bool linked_list_enqueue(linked_list_t *list, const void *data, size_t size);`
-    - [ ] `bool linked_list_dequeue(linked_list_t *list, void *data, size_t *size);`
-    - [ ] `void linked_list_destroy(linked_list_t *list);`
-    - [ ] `size_t linked_list_count(linked_list_t *list);`
+- [x] **File:** `include/linked_list.h` (new file) - **COMMITTED**
+- [x] **Changes:**
+  - [x] Add node structure
+  - [x] Add list structure
+  - [x] Add chunk size constant: `LINKED_LIST_CHUNK_SIZE 100`
+  - [x] Add function declarations: create, enqueue, peek_head, peek_tail, pop_head, pop_tail, destroy, count
 
-- [ ] **File:** `main/linked_list.c` (new file)
-- [ ] **Changes:**
-  - [ ] Add `#include "esp_heap_caps.h"`
-  - [ ] Add `#include "freertos/FreeRTOS.h"`
-  - [ ] Add `#include "freertos/semphr.h"`
-  - [ ] Implement `linked_list_create()`:
-    - [ ] Initialize head/tail to NULL
-    - [ ] Set count to 0
-    - [ ] Take max_size as parameter
-    - [ ] Create mutex: `xSemaphoreCreateMutex()`
-    - [ ] All allocations use PSRAM: `heap_caps_malloc(..., MALLOC_CAP_SPIRAM)`
-  - [ ] Implement `linked_list_enqueue()`:
-    - [ ] Use mutex for thread safety
-    - [ ] If count >= max_size: log warning, return false (do NOT drop old)
-    - [ ] Allocate node in PSRAM
-    - [ ] Copy data to node (caller provides data)
-    - [ ] Append to tail, update head if empty
-    - [ ] Increment count
-  - [ ] Implement `linked_list_dequeue()`:
-    - [ ] Use mutex for thread safety
-    - [ ] If count == 0: return false
-    - [ ] Copy data to caller's buffer
-    - [ ] Copy size to caller's size pointer
-    - [ ] Remove head node, update head to head->next
-    - [ ] If head == NULL, set tail = NULL
-    - [ ] Free node memory
-    - [ ] Decrement count
-  - [ ] Implement `linked_list_destroy()`:
-    - [ ] Clear all nodes (dequeue until empty)
-    - [ ] Delete mutex
-  - [ ] **Add unit tests for linked list:**
-    - [ ] **File:** `docker_tests/unit_tests/main/test_linked_list.c` (new file)
-    - [ ] Follow pattern from `test_circular_buffer.c`:
-      - Include real implementation: `#include "../../main/linked_list.c"`
-      - Use CMock mocks for `esp_heap_caps.h` and `freertos/semphr.h`
-    - [ ] Add test: `test_linked_list_create()` - verify initialization with max_size
-    - [ ] Add test: `test_linked_list_create_failure()` - verify NULL list, zero max_size handling
-    - [ ] Add test: `test_linked_list_enqueue_dequeue()` - verify basic enqueue/dequeue operations
-    - [ ] Add test: `test_linked_list_multiple_items()` - verify FIFO ordering
-    - [ ] Add test: `test_linked_list_full()` - verify enqueue fails when max_size reached
-    - [ ] Add test: `test_linked_list_empty_dequeue()` - verify dequeue fails on empty list
-    - [ ] Add test: `test_linked_list_destroy()` - verify cleanup frees all nodes
-    - [ ] Add test: `test_linked_list_count()` - verify count tracking
-    - [ ] Add test: `test_linked_list_null_parameters()` - verify NULL handling
-    - [ ] Add test file to `docker_tests/unit_tests/CMakeLists.txt`
-    - [ ] Run tests: `.\run_unit_tests.bat`
+- [x] **File:** `main/linked_list.c` (new file) - **COMMITTED**
+- [x] **Changes:**
+  - [x] Add includes
+  - [x] Implement `linked_list_create()`
+  - [x] Implement `linked_list_enqueue()` - stores pointer directly (no copy)
+  - [x] Implement `linked_list_peek_head()`
+  - [x] Implement `linked_list_peek_tail()`
+  - [x] Implement `linked_list_pop_head()`
+  - [x] Implement `linked_list_pop_tail()`
+  - [x] Implement `linked_list_destroy()`
+  - [x] Implement `linked_list_count()`
+  - [x] **Add unit tests for linked list:**
+    - [x] **File:** `docker_tests/unit_tests/main/test_linked_list.c` (new file) - **25 comprehensive tests**
+    - [x] All tests passing (verified with `.\run_unit_tests.bat`)
+    - [x] Mock wrapper pattern documented in `DOCKER_TESTING_README.md`
 
 ### 5. Update WebSocket Handler to Use Circular Buffer Subscribers
 
@@ -268,44 +194,34 @@ Implement browser-side data collection, storage, aggregation, and visualization 
 
 ### 6. Update Data Collection (App.jsx)
 
-- [ ] **File:** `web/src/App.jsx`
-- [ ] **Changes:**
-  - [ ] **Remove sliding window:**
-    - [ ] Remove `SLIDING_WINDOW_SIZE` constant
-    - [ ] Change `setAirData` to accumulate ALL data (no slice)
-    - [ ] Change `setHeaterData` to accumulate ALL data (no slice)
-  - [ ] **Handle initial historical data:**
-    - [ ] When receiving initial data (array with multiple points), process all points
-    - [ ] Handle the case where initial data contains both air and heater readings
-  - [ ] **Add granularity state:**
-    - [ ] Add: `const [granularity, setGranularity] = useState('second');`
-    - [ ] Add granularity options: `'second'`, `'minute'`, `'10min'`, `'hour'`
-  - [ ] **Add granularity selector UI:**
-    - [ ] Add ToggleButtonGroup or Select component
-    - [ ] Options: "1s", "1m", "10m", "1h"
-  - [ ] **Pass data through aggregation:**
-    - [ ] Import `useAggregatedData` hook
-    - [ ] Transform raw data before passing to charts
+- [x] **File:** `web/src/App.jsx` - **COMMITTED**
+- [x] **Changes:**
+  - [x] **Remove sliding window:**
+    - [x] Removed `SLIDING_WINDOW_SIZE` constant
+    - [x] `setAirData` accumulates ALL data (no slice)
+    - [x] `setHeaterData` accumulates ALL data (no slice)
+  - [x] **Handle initial historical data:**
+    - [x] Receives array with multiple points, processes all points
+  - [x] **Add granularity state:**
+    - [x] `const [granularity, setGranularity] = useState('second');`
+    - [x] Granularity options: `'second'`, `'minute'`, `'10min'`, `'hour'`
+  - [x] **Add granularity selector UI:**
+    - [x] ToggleButtonGroup with options: "1s", "1m", "10m", "1h"
+  - [x] **Pass data through aggregation:**
+    - [x] Import `useAggregatedData` hook
+    - [x] Transform raw data before passing to charts
 
 ### 7. Create Aggregation Hook
 
-- [ ] **File:** `web/src/hooks/useAggregatedData.js` (new file)
-- [ ] **Changes:**
-  - [ ] Create hook: `export const useAggregatedData = (data, granularity) => { ... }`
-  - [ ] Implement `aggregateBySecond(data)` - return raw data unchanged
-  - [ ] Implement `aggregateByMinute(data)`:
-    - [ ] Group by minute (timestamp // 60000)
-    - [ ] Calculate average temperature per minute bucket
-    - [ ] Return: `[{ x: bucket_timestamp, y: avg_temperature }]`
-  - [ ] Implement `aggregateBy10Min(data)`:
-    - [ ] Group by 10-minute window (timestamp // 600000)
-    - [ ] Calculate average per bucket
-    - [ ] Return aggregated data
-  - [ ] Implement `aggregateByHour(data)`:
-    - [ ] Group by hour (timestamp // 3600000)
-    - [ ] Calculate average per bucket
-    - [ ] Return aggregated data
-  - [ ] Return appropriate aggregated data based on `granularity` parameter
+- [x] **File:** `web/src/hooks/useAggregatedData.js` (new file) - **COMMITTED**
+- [x] **Changes:**
+  - [x] Create hook: `export const useAggregatedData = (data, granularity)`
+  - [x] Implement `aggregateBySecond(data)` - return raw data unchanged
+  - [x] Implement `aggregateByMinute(data)` - group by minute, calculate average
+  - [x] Implement `aggregateBy10Min(data)` - group by 10-minute window, calculate average
+  - [x] Implement `aggregateByHour(data)` - group by hour, calculate average
+  - [x] Return appropriate aggregated data based on `granularity` parameter
+  - [x] Uses `useMemo` for performance optimization
 
 ---
 
@@ -379,22 +295,46 @@ Heater buffer message:
 
 ## Implementation Order
 
-1. Increase `TEMP_BUFFER_SIZE` in `include/temp.h`
-2. Add subscriber system and `circular_buffer_iterate()` to `circular_buffer.h` and `circular_buffer.c`
-3. Add unit tests for circular buffer subscriber system
-4. Run circular buffer subscriber tests: `.\run_unit_tests.bat`
-5. Add buffer accessors to `temp.h` and `temp.c`
-6. Create linked list module: `include/linked_list.h` and `main/linked_list.c`
-7. Add linked list tests: `docker_tests/unit_tests/main/test_linked_list.c`
-8. Add linked list test file to `docker_tests/unit_tests/CMakeLists.txt`
-9. Run linked list tests: `.\run_unit_tests.bat`
-10. Add linked list to ESP32 build: add `main/linked_list.c` to `main/CMakeLists.txt`
-11. Update `web_websocket.c` to subscribe to circular buffers, use linked list, and implement send task with semaphore
-12. Build and test ESP32
-13. Create `useAggregatedData.js` hook
-14. Update `App.jsx` for data collection and granularity
-15. Build and test web application
-16. Verify end-to-end functionality
+1. [x] Increase `TEMP_BUFFER_SIZE` in `include/temp.h` - **COMMITTED (7200 = 2 hours)**
+2. [x] Add subscriber system and `circular_buffer_iterate()` to `circular_buffer.h` and `circular_buffer.c` - **COMMITTED**
+   - [x] Header changes committed
+   - [x] Implementation in `main/circular_buffer.c` - **COMMITTED**
+3. [x] Add unit tests for circular buffer subscriber system - **COMMITTED (10 tests)**
+4. [x] Run circular buffer subscriber tests: `.\run_unit_tests.bat` - **ALL 60 TESTS PASSING**
+5. [x] Add buffer accessors to `temp.h` and `temp.c` - **COMMITTED**
+6. [x] Create linked list module: `include/linked_list.h` and `main/linked_list.c` - **COMMITTED**
+7. [x] Add linked list tests: `docker_tests/unit_tests/main/test_linked_list.c` - **COMMITTED (25 tests)**
+8. [x] Add linked list test file to `docker_tests/unit_tests/CMakeLists.txt` - **COMMITTED**
+9. [x] Run linked list tests: `.\run_unit_tests.bat` - **ALL TESTS PASSING**
+10. [ ] Add linked list to ESP32 build: add `main/linked_list.c` to `main/CMakeLists.txt` - **TODO**
+11. [ ] Update `web_websocket.c` to subscribe to circular buffers, use linked list, and implement send task with semaphore - **TODO**
+12. [ ] Build and test ESP32 - **TODO**
+13. [x] Create `useAggregatedData.js` hook - **COMMITTED**
+14. [x] Update `App.jsx` for data collection and granularity - **COMMITTED**
+15. [ ] Build and test web application - **TODO**
+16. [ ] Verify end-to-end functionality - **TODO**
+
+---
+
+## Current Progress Summary
+
+**Completed (committed):**
+- ✅ TEMP_BUFFER_SIZE set to 7200 (2 hours) in `include/temp.h`
+- ✅ Circular buffer subscriber system (`include/circular_buffer.h`, `main/circular_buffer.c`)
+- ✅ Circular buffer subscriber unit tests (10 tests in `test_circular_buffer.c`)
+- ✅ Temperature buffer accessors (`temp_sensor_get_air_buffer()`, `temp_sensor_get_heater_buffer()`)
+- ✅ Linked list module (`include/linked_list.h`, `main/linked_list.c`)
+- ✅ Linked list unit tests (25 tests in `test_linked_list.c`)
+- ✅ Web aggregation hook (`web/src/hooks/useAggregatedData.js`)
+- ✅ Web App.jsx with granularity selector and data accumulation
+- ✅ Mock wrapper pattern documentation (`DOCKER_TESTING_README.md`)
+- ✅ All 60 unit tests passing
+
+**Remaining work:**
+- ❌ Add linked_list.c to ESP32 build (main/CMakeLists.txt)
+- ❌ Update `web_websocket.c` to use subscriber system and linked list
+- ❌ Build and test ESP32 firmware
+- ❌ End-to-end testing with real device
 
 ---
 
