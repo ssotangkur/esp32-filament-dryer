@@ -345,6 +345,20 @@ bool mock_circular_buffer_unsubscribe(circular_buffer_t *cb, void *user_data)
   return circular_buffer_unsubscribe(cb, user_data);
 }
 
+// Wrapper for unsubscribe that expects failure (subscriber not found)
+bool mock_circular_buffer_unsubscribe_not_found(circular_buffer_t *cb, void *user_data)
+{
+  if (cb == NULL)
+  {
+    return circular_buffer_unsubscribe(cb, user_data);
+  }
+
+  xSemaphoreTake_ExpectAndReturn(cb->mutex, portMAX_DELAY, pdTRUE);
+  xSemaphoreGive_ExpectAndReturn(cb->mutex, pdTRUE);
+
+  return circular_buffer_unsubscribe(cb, user_data);
+}
+
 bool mock_circular_buffer_iterate(circular_buffer_t *cb, bool (*callback)(size_t index, const void *data, void *user_data), void *user_data)
 {
   if (cb == NULL || callback == NULL)
@@ -435,10 +449,8 @@ void test_circular_buffer_unsubscribe_not_found(void)
 
   TEST_ASSERT_TRUE(mock_circular_buffer_subscribe(&test_buf, test_subscribe_callback, user_data1));
 
-  // Try to unsubscribe with different user_data - should fail but still take/give semaphore
-  xSemaphoreTake_ExpectAndReturn(test_buf.mutex, portMAX_DELAY, pdTRUE);
-  xSemaphoreGive_ExpectAndReturn(test_buf.mutex, pdTRUE);
-  TEST_ASSERT_FALSE(circular_buffer_unsubscribe(&test_buf, user_data2));
+  // Try to unsubscribe with different user_data - should fail (subscriber not found)
+  TEST_ASSERT_FALSE(mock_circular_buffer_unsubscribe_not_found(&test_buf, user_data2));
 
   mock_circular_buffer_free(&test_buf, buffer);
 }
