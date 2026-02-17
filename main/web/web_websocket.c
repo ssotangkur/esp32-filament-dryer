@@ -153,10 +153,11 @@ static void ws_send_task(void *arg)
 
     while (linked_list_count(&sess->pending_msgs) > 0)
     {
-      char msg_buf[4096];
+      char *json_buf;
       size_t msg_size;
 
-      if (!linked_list_dequeue(&sess->pending_msgs, msg_buf, &msg_size))
+      json_buf = linked_list_pop_head(&sess->pending_msgs, &msg_size);
+      if (json_buf == NULL)
       {
         break;
       }
@@ -165,10 +166,11 @@ static void ws_send_task(void *arg)
           .final = true,
           .fragmented = false,
           .type = HTTPD_WS_TYPE_TEXT,
-          .payload = (uint8_t *)msg_buf,
-          .len = strlen(msg_buf)};
+          .payload = (uint8_t *)json_buf,
+          .len = strlen(json_buf)};
 
       httpd_ws_send_frame_async(server, sess->sockfd, &ws_resp);
+      heap_caps_free(json_buf);
     }
   }
 
