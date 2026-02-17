@@ -38,7 +38,7 @@ extern "C"
 #define HEATER_TEMP_ADC_VOLTAGE_REFERENCE 3.3f // 3.3V ADC reference voltage
 
 // Temperature sensor system configuration
-#define TEMP_BUFFER_SIZE 5
+#define TEMP_BUFFER_SIZE 7200 // ~2 hours at 1 sample/sec
 #define TEMP_TASK_STACK_SIZE 4096
 #define TEMP_TASK_PRIORITY 2
 #define TEMP_READ_INTERVAL_MS 1000 // Read temperature every second
@@ -145,6 +145,18 @@ extern "C"
    * @return Latest resistance in ohms, or -999.0f if no samples available or invalid sensor
    */
   float temp_sensor_get_resistance(temp_sensor_handle_t sensor);
+
+  /**
+   * @brief Get the circular buffer for air temperature sensor
+   * @return Pointer to the air temperature circular buffer
+   */
+  circular_buffer_t *temp_sensor_get_air_buffer(void);
+
+  /**
+   * @brief Get the circular buffer for heater temperature sensor
+   * @return Pointer to the heater temperature circular buffer
+   */
+  circular_buffer_t *temp_sensor_get_heater_buffer(void);
 
   /**
    * @brief Deinitialize temperature sensor (cleanup resources)

@@ -3,8 +3,9 @@
 #include "esp_log.h"
 #include "circular_buffer.h"
 #include "temp.h"
-#include "ui/subjects.h"
+#include "linked_list.h"
 #include "wifi.h"
+#include "esp_heap_caps.h"
 #include <string.h>
 #include <stdlib.h>
 
@@ -15,6 +16,9 @@ static bool g_ws_registered = false;
 
 typedef struct ws_session_ctx ws_session_ctx_t;
 
+#define WS_SEND_TASK_STACK_SIZE 4096
+#define WS_SEND_TASK_PRIORITY 3
+
 struct ws_session_ctx
 {
   char *buffer;
@@ -22,75 +26,160 @@ struct ws_session_ctx
   bool accumulating_text;
   int sockfd;
   bool handshake_complete;
+  bool running;
+  linked_list_t pending_msgs;
+  SemaphoreHandle_t send_sem;
+  TaskHandle_t send_task_handle;
   ws_session_ctx_t *next;
 };
 
-/**
- * @brief Broadcast temperature data to all connected WebSocket clients
- * @param sensor Sensor identifier ("air" or "heater")
- * @param temperature Current temperature reading
- * @note Formats JSON payload and sends to all sessions with completed handshakes
- */
+static void ws_send_task(void *arg);
+
+static void air_buffer_callback(const void *data, size_t count, void *user_data)
+{
+  ws_session_ctx_t *sess = (ws_session_ctx_t *)user_data;
+  if (sess == NULL || data == NULL || count == 0)
+  {
+    return;
+  }
+
+  const temp_sample_t *samples = (const temp_sample_t *)data;
+
+  size_t chunk_size = LINKED_LIST_CHUNK_SIZE;
+  for (size_t offset = 0; offset < count; offset += chunk_size)
+  {
+    size_t remaining = count - offset;
+    size_t this_chunk = (remaining < chunk_size) ? remaining : chunk_size;
+
+    char *json_buf = heap_caps_malloc(4096, MALLOC_CAP_SPIRAM);
+    if (json_buf == NULL)
+    {
+      ESP_LOGE(TAG, "air_buffer_callback: failed to allocate JSON buffer");
+      continue;
+    }
+
+    size_t pos = 0;
+    pos += snprintf(json_buf + pos, 4096 - pos, "[");
+
+    for (size_t i = 0; i < this_chunk; i++)
+    {
+      if (i > 0)
+      {
+        pos += snprintf(json_buf + pos, 4096 - pos, ",");
+      }
+      pos += snprintf(json_buf + pos, 4096 - pos,
+                      "{\"sensor\":\"air\",\"temperature\":%.2f,\"timestamp\":%lu}",
+                      samples[offset + i].temperature,
+                      (unsigned long)samples[offset + i].timestamp);
+    }
+
+    pos += snprintf(json_buf + pos, 4096 - pos, "]");
+
+    if (linked_list_enqueue(&sess->pending_msgs, json_buf, strlen(json_buf) + 1))
+    {
+      xSemaphoreGive(sess->send_sem);
+    }
+
+    heap_caps_free(json_buf);
+  }
+}
+
+static void heater_buffer_callback(const void *data, size_t count, void *user_data)
+{
+  ws_session_ctx_t *sess = (ws_session_ctx_t *)user_data;
+  if (sess == NULL || data == NULL || count == 0)
+  {
+    return;
+  }
+
+  const temp_sample_t *samples = (const temp_sample_t *)data;
+
+  size_t chunk_size = LINKED_LIST_CHUNK_SIZE;
+  for (size_t offset = 0; offset < count; offset += chunk_size)
+  {
+    size_t remaining = count - offset;
+    size_t this_chunk = (remaining < chunk_size) ? remaining : chunk_size;
+
+    char *json_buf = heap_caps_malloc(4096, MALLOC_CAP_SPIRAM);
+    if (json_buf == NULL)
+    {
+      ESP_LOGE(TAG, "heater_buffer_callback: failed to allocate JSON buffer");
+      continue;
+    }
+
+    size_t pos = 0;
+    pos += snprintf(json_buf + pos, 4096 - pos, "[");
+
+    for (size_t i = 0; i < this_chunk; i++)
+    {
+      if (i > 0)
+      {
+        pos += snprintf(json_buf + pos, 4096 - pos, ",");
+      }
+      pos += snprintf(json_buf + pos, 4096 - pos,
+                      "{\"sensor\":\"heater\",\"temperature\":%.2f,\"timestamp\":%lu}",
+                      samples[offset + i].temperature,
+                      (unsigned long)samples[offset + i].timestamp);
+    }
+
+    pos += snprintf(json_buf + pos, 4096 - pos, "]");
+
+    if (linked_list_enqueue(&sess->pending_msgs, json_buf, strlen(json_buf) + 1))
+    {
+      xSemaphoreGive(sess->send_sem);
+    }
+
+    heap_caps_free(json_buf);
+  }
+}
+
+static void ws_send_task(void *arg)
+{
+  ws_session_ctx_t *sess = (ws_session_ctx_t *)arg;
+
+  ESP_LOGI(TAG, "ws_send_task: started for session %p", (void *)sess);
+
+  while (sess->running)
+  {
+    if (xSemaphoreTake(sess->send_sem, portMAX_DELAY) != pdTRUE)
+    {
+      continue;
+    }
+
+    if (!sess->running)
+    {
+      break;
+    }
+
+    while (linked_list_count(&sess->pending_msgs) > 0)
+    {
+      char msg_buf[4096];
+      size_t msg_size;
+
+      if (!linked_list_dequeue(&sess->pending_msgs, msg_buf, &msg_size))
+      {
+        break;
+      }
+
+      httpd_ws_frame_t ws_resp = {
+          .final = true,
+          .fragmented = false,
+          .type = HTTPD_WS_TYPE_TEXT,
+          .payload = (uint8_t *)msg_buf,
+          .len = strlen(msg_buf)};
+
+      httpd_ws_send_frame_async(server, sess->sockfd, &ws_resp);
+    }
+  }
+
+  ESP_LOGI(TAG, "ws_send_task: exiting for session %p", (void *)sess);
+  vTaskDelete(NULL);
+}
+
 void ws_broadcast_data(const char *sensor, float temperature)
 {
-  char json_data[128];
-  snprintf(json_data, sizeof(json_data), "[{\"sensor\":\"%s\",\"temperature\":%.2f,\"timestamp\":%llu}]",
-           sensor, temperature, (unsigned long long)wifi_get_epoch_ms());
-
-  ESP_LOGI(TAG, "ws_broadcast_data: broadcasting %s=%.2f to WebSocket clients", sensor, temperature);
-
-  httpd_ws_frame_t ws_resp = {
-      .final = true,
-      .fragmented = false,
-      .type = HTTPD_WS_TYPE_TEXT,
-      .payload = (uint8_t *)json_data,
-      .len = strlen(json_data)};
-
-  int broadcast_count = 0;
-  ws_session_ctx_t *sess = g_first_session;
-  while (sess != NULL)
-  {
-    ESP_LOGD(TAG, "ws_broadcast_data: checking session %p sockfd=%d handshake_complete=%d",
-             (void *)sess, sess->sockfd, sess->handshake_complete);
-    if (sess->handshake_complete)
-    {
-      httpd_ws_send_frame_async(server, sess->sockfd, &ws_resp);
-      broadcast_count++;
-    }
-    sess = sess->next;
-  }
-  ESP_LOGI(TAG, "ws_broadcast_data: broadcast to %d clients", broadcast_count);
 }
 
-/**
- * @brief LVGL observer callback for air temperature subject changes
- * @param observer Pointer to the observer (unused)
- * @param subject Pointer to the air temperature subject
- * @note Broadcasts only the air temperature to WebSocket clients
- */
-static void air_temp_subject_callback(lv_observer_t *observer, lv_subject_t *subject)
-{
-  float air_temp = lv_subject_get_float(subject);
-  ws_broadcast_data("air", air_temp);
-}
-
-/**
- * @brief LVGL observer callback for heater temperature subject changes
- * @param observer Pointer to the observer (unused)
- * @param subject Pointer to the heater temperature subject
- * @note Broadcasts only the heater temperature to WebSocket clients
- */
-static void heater_temp_subject_callback(lv_observer_t *observer, lv_subject_t *subject)
-{
-  float heater_temp = lv_subject_get_float(subject);
-  ws_broadcast_data("heater", heater_temp);
-}
-
-/**
- * @brief Add a WebSocket session to the global linked list
- * @param sess Session to add
- * @note Inserts at head of list for O(1) insertion
- */
 static void ws_add_session(ws_session_ctx_t *sess)
 {
   ESP_LOGI(TAG, "ws_add_session: adding session %p to list", (void *)sess);
@@ -98,11 +187,6 @@ static void ws_add_session(ws_session_ctx_t *sess)
   g_first_session = sess;
 }
 
-/**
- * @brief Remove a WebSocket session from the global linked list
- * @param sess Session to remove
- * @note Handles head, middle, and end of list removal
- */
 static void ws_remove_session(ws_session_ctx_t *sess)
 {
   ESP_LOGI(TAG, "ws_remove_session: removing session %p from list", (void *)sess);
@@ -120,13 +204,6 @@ static void ws_remove_session(ws_session_ctx_t *sess)
   ESP_LOGW(TAG, "ws_remove_session: session %p not found in list", (void *)sess);
 }
 
-/**
- * @brief Get or create WebSocket session context for a request
- * @param req HTTP request
- * @param[out] session_out Pointer to store session context
- * @return ESP_OK on success, ESP_ERR_NO_MEM on allocation failure
- * @note Stores session in req->sess_ctx for persistence across requests
- */
 static esp_err_t get_or_create_session_context(httpd_req_t *req, ws_session_ctx_t **session_out)
 {
   ws_session_ctx_t *sess = (ws_session_ctx_t *)req->sess_ctx;
@@ -141,6 +218,26 @@ static esp_err_t get_or_create_session_context(httpd_req_t *req, ws_session_ctx_
       return ESP_ERR_NO_MEM;
     }
     sess->sockfd = -1;
+    sess->running = false;
+
+    if (!linked_list_create(&sess->pending_msgs, TEMP_BUFFER_SIZE + 100))
+    {
+      ESP_LOGE(TAG, "Failed to create pending_msgs linked list");
+      free(sess);
+      *session_out = NULL;
+      return ESP_ERR_NO_MEM;
+    }
+
+    sess->send_sem = xSemaphoreCreateBinary();
+    if (sess->send_sem == NULL)
+    {
+      ESP_LOGE(TAG, "Failed to create send semaphore");
+      linked_list_destroy(&sess->pending_msgs);
+      free(sess);
+      *session_out = NULL;
+      return ESP_ERR_NO_MEM;
+    }
+
     req->sess_ctx = sess;
     ws_add_session(sess);
     ESP_LOGI(TAG, "Session context created at %p", (void *)sess);
@@ -152,16 +249,29 @@ static esp_err_t get_or_create_session_context(httpd_req_t *req, ws_session_ctx_
     ESP_LOGI(TAG, "Assigned sockfd=%d to session %p", sess->sockfd, (void *)sess);
   }
 
+  if (!sess->running && sess->handshake_complete)
+  {
+    sess->running = true;
+
+    BaseType_t ret = xTaskCreate(ws_send_task, "ws_send", WS_SEND_TASK_STACK_SIZE,
+                                  sess, WS_SEND_TASK_PRIORITY, &sess->send_task_handle);
+    if (ret != pdPASS)
+    {
+      ESP_LOGE(TAG, "Failed to create send task");
+      sess->running = false;
+    }
+    else
+    {
+      circular_buffer_subscribe(temp_sensor_get_air_buffer(), air_buffer_callback, sess);
+      circular_buffer_subscribe(temp_sensor_get_heater_buffer(), heater_buffer_callback, sess);
+      ESP_LOGI(TAG, "Session %p subscribed to temperature buffers", (void *)sess);
+    }
+  }
+
   *session_out = sess;
   return ESP_OK;
 }
 
-/**
- * @brief Clean up and free a WebSocket session context
- * @param req HTTP request
- * @param sess Session to clean up
- * @note Removes session from linked list and frees all allocated memory
- */
 static void cleanup_session_context(httpd_req_t *req, ws_session_ctx_t *sess)
 {
   if (sess == NULL)
@@ -179,6 +289,29 @@ static void cleanup_session_context(httpd_req_t *req, ws_session_ctx_t *sess)
   int sockfd = sess->sockfd;
   ESP_LOGI(TAG, "cleanup_session_context: removing session from list fd=%d", sockfd);
 
+  if (sess->running)
+  {
+    sess->running = false;
+    xSemaphoreGive(sess->send_sem);
+
+    if (sess->send_task_handle != NULL)
+    {
+      ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+      sess->send_task_handle = NULL;
+    }
+  }
+
+  circular_buffer_unsubscribe(temp_sensor_get_air_buffer(), sess);
+  circular_buffer_unsubscribe(temp_sensor_get_heater_buffer(), sess);
+
+  linked_list_destroy(&sess->pending_msgs);
+
+  if (sess->send_sem != NULL)
+  {
+    vSemaphoreDelete(sess->send_sem);
+    sess->send_sem = NULL;
+  }
+
   ws_remove_session(sess);
   if (sess->buffer)
   {
@@ -190,75 +323,60 @@ static void cleanup_session_context(httpd_req_t *req, ws_session_ctx_t *sess)
   ESP_LOGI(TAG, "cleanup_session_context: done fd=%d (HTTP server will free memory)", sockfd);
 }
 
-/**
- * @brief Initialize WebSocket client registry and subscribe to temperature subjects
- * @return ESP_OK on success
- * @note Registers callbacks with LVGL subjects; only runs once (g_ws_registered guard)
- */
 esp_err_t ws_clients_init(void)
 {
   if (!g_ws_registered)
   {
-    ESP_LOGI(TAG, "Registering WebSocket observers for temperature subjects");
-    lv_subject_add_observer(&g_subject_air_temp, air_temp_subject_callback, NULL);
-    lv_subject_add_observer(&g_subject_heater_temp, heater_temp_subject_callback, NULL);
+    ESP_LOGI(TAG, "WebSocket client system initialized (subscribers will be added per-session)");
     g_ws_registered = true;
-    ESP_LOGI(TAG, "WebSocket subscribed to temperature subjects");
   }
   return ESP_OK;
 }
 
-/**
- * @brief Broadcast current sensor readings to all WebSocket clients
- * @note Used for explicit data requests ("get_data" message)
- */
 void ws_broadcast_latest_sensor_data(void)
 {
-  float air_temp = lv_subject_get_float(&g_subject_air_temp);
-  float heater_temp = lv_subject_get_float(&g_subject_heater_temp);
-  ws_broadcast_data("air", air_temp);
-  ws_broadcast_data("heater", heater_temp);
 }
 
-/**
- * @brief Send temperature data as JSON to a specific WebSocket client
- * @param req HTTP request
- * @param sess Session to send to
- * @note Used for responding to "get_data" requests from clients
- */
 static void send_sensor_data_json(httpd_req_t *req, ws_session_ctx_t *sess)
 {
-  float air_temp = lv_subject_get_float(&g_subject_air_temp);
-  float heater_temp = lv_subject_get_float(&g_subject_heater_temp);
-  uint64_t epoch_ms = wifi_get_epoch_ms();
+  temp_sample_t air_sample;
+  temp_sample_t heater_sample;
 
-  char json_data[256];
-  snprintf(json_data, sizeof(json_data), "[{\"sensor\":\"air\",\"temperature\":%.2f,\"timestamp\":%llu},{\"sensor\":\"heater\",\"temperature\":%.2f,\"timestamp\":%llu}]",
-           air_temp, (unsigned long long)epoch_ms,
-           heater_temp, (unsigned long long)epoch_ms);
-
-  ESP_LOGI(TAG, "send_sensor_data_json: sending air=%.2f, heater=%.2f", air_temp, heater_temp);
-
-  httpd_ws_frame_t ws_resp = {
-      .final = true,
-      .fragmented = false,
-      .type = HTTPD_WS_TYPE_TEXT,
-      .payload = (uint8_t *)json_data,
-      .len = strlen(json_data)};
-
-  esp_err_t ret = httpd_ws_send_frame(req, &ws_resp);
-  if (ret != ESP_OK)
+  if (temp_sensor_get_latest_sample(temp_sensor_get_air_sensor(), &air_sample))
   {
-    ESP_LOGD(TAG, "Failed to send sensor data to WebSocket client fd=%d", sess->sockfd);
+    char json_data[256];
+    snprintf(json_data, sizeof(json_data),
+             "[{\"sensor\":\"air\",\"temperature\":%.2f,\"timestamp\":%lu}]",
+             air_sample.temperature, (unsigned long)air_sample.timestamp);
+
+    httpd_ws_frame_t ws_resp = {
+        .final = true,
+        .fragmented = false,
+        .type = HTTPD_WS_TYPE_TEXT,
+        .payload = (uint8_t *)json_data,
+        .len = strlen(json_data)};
+
+    httpd_ws_send_frame(req, &ws_resp);
+  }
+
+  if (temp_sensor_get_latest_sample(temp_sensor_get_heater_sensor(), &heater_sample))
+  {
+    char json_data[256];
+    snprintf(json_data, sizeof(json_data),
+             "[{\"sensor\":\"heater\",\"temperature\":%.2f,\"timestamp\":%lu}]",
+             heater_sample.temperature, (unsigned long)heater_sample.timestamp);
+
+    httpd_ws_frame_t ws_resp = {
+        .final = true,
+        .fragmented = false,
+        .type = HTTPD_WS_TYPE_TEXT,
+        .payload = (uint8_t *)json_data,
+        .len = strlen(json_data)};
+
+    httpd_ws_send_frame(req, &ws_resp);
   }
 }
 
-/**
- * @brief Main WebSocket handler for sensor data endpoint
- * @param req HTTP request
- * @return ESP_OK on success
- * @note Handles WebSocket handshake, frames, and session lifecycle
- */
 esp_err_t sensor_data_handler(httpd_req_t *req)
 {
   ws_session_ctx_t *sess;

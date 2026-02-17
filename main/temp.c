@@ -684,3 +684,13 @@ float temp_sensor_get_voltage(temp_sensor_handle_t sensor)
 
     ESP_LOGI(TAG, "Temperature sensor deinitialized");
   }
+
+  circular_buffer_t *temp_sensor_get_air_buffer(void)
+  {
+    return &temp_buffer_1;
+  }
+
+  circular_buffer_t *temp_sensor_get_heater_buffer(void)
+  {
+    return &temp_buffer_2;
+  }

@@ -9,3 +9,4 @@
 // Mock heap functions (will be mocked by CMock)
 void *heap_caps_malloc(size_t size, uint32_t caps);
 void heap_caps_free(void *ptr);
+void *heap_caps_realloc(void *ptr, size_t size, uint32_t caps);

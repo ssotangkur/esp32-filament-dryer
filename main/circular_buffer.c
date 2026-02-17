@@ -2,6 +2,8 @@
 #include "esp_heap_caps.h"
 #include <string.h>
 
+static bool notify_subscribers(circular_buffer_t *cb, const void *data, size_t count);
+
 /**
  * @brief Initialize a circular buffer
  * @param cb Pointer to circular_buffer_t structure
@@ -30,6 +32,8 @@ bool circular_buffer_init(circular_buffer_t *cb, size_t element_size, size_t buf
   cb->buffer_size = buffer_size;
   cb->head = 0;
   cb->count = 0;
+  cb->subscribers = NULL;
+  cb->subscriber_count = 0;
 
   // Create mutex for thread safety
   cb->mutex = xSemaphoreCreateMutex();
@@ -73,6 +77,12 @@ bool circular_buffer_push(circular_buffer_t *cb, const void *data)
   if (cb->count < cb->buffer_size)
   {
     cb->count++;
+  }
+
+  // Notify all subscribers about the new data point
+  if (cb->subscriber_count > 0)
+  {
+    notify_subscribers(cb, dest, 1);
   }
 
   xSemaphoreGive(cb->mutex);
@@ -233,6 +243,13 @@ void circular_buffer_free(circular_buffer_t *cb)
     return;
   }
 
+  if (cb->subscribers != NULL)
+  {
+    heap_caps_free(cb->subscribers);
+    cb->subscribers = NULL;
+  }
+  cb->subscriber_count = 0;
+
   if (cb->mutex != NULL)
   {
     vSemaphoreDelete(cb->mutex);
@@ -249,4 +266,156 @@ void circular_buffer_free(circular_buffer_t *cb)
   cb->buffer_size = 0;
   cb->head = 0;
   cb->count = 0;
+}
+
+static bool notify_subscribers(circular_buffer_t *cb, const void *data, size_t count)
+{
+  for (size_t i = 0; i < cb->subscriber_count; i++)
+  {
+    if (cb->subscribers[i].callback != NULL)
+    {
+      cb->subscribers[i].callback(data, count, cb->subscribers[i].user_data);
+    }
+  }
+  return true;
+}
+
+bool circular_buffer_subscribe(circular_buffer_t *cb, circular_buffer_subscriber_cb_t callback, void *user_data)
+{
+  if (cb == NULL || callback == NULL)
+  {
+    return false;
+  }
+
+  if (xSemaphoreTake(cb->mutex, portMAX_DELAY) != pdTRUE)
+  {
+    return false;
+  }
+
+  circular_buffer_subscriber_t *new_subscribers = heap_caps_malloc(
+      (cb->subscriber_count + 1) * sizeof(circular_buffer_subscriber_t),
+      MALLOC_CAP_SPIRAM);
+
+  if (new_subscribers == NULL)
+  {
+    xSemaphoreGive(cb->mutex);
+    return false;
+  }
+
+  if (cb->subscribers != NULL)
+  {
+    memcpy(new_subscribers, cb->subscribers, cb->subscriber_count * sizeof(circular_buffer_subscriber_t));
+    heap_caps_free(cb->subscribers);
+  }
+
+  cb->subscribers = new_subscribers;
+  cb->subscribers[cb->subscriber_count].callback = callback;
+  cb->subscribers[cb->subscriber_count].user_data = user_data;
+  cb->subscriber_count++;
+
+  // Send all historical data to the new subscriber
+  if (cb->count > 0)
+  {
+    // Allocate temporary buffer to hold all data
+    void *hist_data = heap_caps_malloc(cb->count * cb->element_size, MALLOC_CAP_SPIRAM);
+    if (hist_data != NULL)
+    {
+      // Copy all elements in order (oldest to newest)
+      for (size_t i = 0; i < cb->count; i++)
+      {
+        size_t buffer_index = (cb->head + cb->buffer_size - cb->count + i) % cb->buffer_size;
+        void *src = (uint8_t *)cb->buffer + (buffer_index * cb->element_size);
+        void *dest = (uint8_t *)hist_data + (i * cb->element_size);
+        memcpy(dest, src, cb->element_size);
+      }
+
+      // Call subscriber with all historical data
+      callback(hist_data, cb->count, user_data);
+      heap_caps_free(hist_data);
+    }
+  }
+
+  xSemaphoreGive(cb->mutex);
+  return true;
+}
+
+bool circular_buffer_unsubscribe(circular_buffer_t *cb, void *user_data)
+{
+  if (cb == NULL)
+  {
+    return false;
+  }
+
+  if (xSemaphoreTake(cb->mutex, portMAX_DELAY) != pdTRUE)
+  {
+    return false;
+  }
+
+  // Find and remove the subscriber
+  for (size_t i = 0; i < cb->subscriber_count; i++)
+  {
+    if (cb->subscribers[i].user_data == user_data)
+    {
+      // Shift remaining subscribers
+      for (size_t j = i; j < cb->subscriber_count - 1; j++)
+      {
+        cb->subscribers[j] = cb->subscribers[j + 1];
+      }
+      cb->subscriber_count--;
+
+      if (cb->subscriber_count == 0)
+      {
+        heap_caps_free(cb->subscribers);
+        cb->subscribers = NULL;
+      }
+      else
+      {
+        circular_buffer_subscriber_t *new_subscribers = heap_caps_malloc(
+            cb->subscriber_count * sizeof(circular_buffer_subscriber_t),
+            MALLOC_CAP_SPIRAM);
+        if (new_subscribers != NULL)
+        {
+          memcpy(new_subscribers, cb->subscribers, cb->subscriber_count * sizeof(circular_buffer_subscriber_t));
+          heap_caps_free(cb->subscribers);
+          cb->subscribers = new_subscribers;
+        }
+      }
+
+      xSemaphoreGive(cb->mutex);
+      return true;
+    }
+  }
+
+  xSemaphoreGive(cb->mutex);
+  return false;
+}
+
+bool circular_buffer_iterate(circular_buffer_t *cb, bool (*callback)(size_t index, const void *data, void *user_data), void *user_data)
+{
+  if (cb == NULL || callback == NULL)
+  {
+    return false;
+  }
+
+  if (xSemaphoreTake(cb->mutex, portMAX_DELAY) != pdTRUE)
+  {
+    return false;
+  }
+
+  bool result = true;
+
+  for (size_t i = 0; i < cb->count; i++)
+  {
+    size_t buffer_index = (cb->head + cb->buffer_size - cb->count + i) % cb->buffer_size;
+    void *data = (uint8_t *)cb->buffer + (buffer_index * cb->element_size);
+
+    if (!callback(i, data, user_data))
+    {
+      result = false;
+      break;
+    }
+  }
+
+  xSemaphoreGive(cb->mutex);
+  return result;
 }

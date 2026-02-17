@@ -71,7 +71,18 @@ void *mock_circular_buffer_init_success(circular_buffer_t *cb, size_t element_si
 
 ### Wrapper Functions That Call Real Functions
 
-The recommended pattern:
+**What are mock wrappers?**
+
+Mock wrapper functions are helper functions that encapsulate CMock expectation setup and then call the real function. They keep test code clean and reusable by moving mock setup logic out of individual test functions.
+
+**Why use mock wrappers instead of calling mock macros directly in tests?**
+
+1. **Cleaner tests** - Test functions focus on *what* is being tested, not *how* mocks are set up
+2. **Reusable setup** - Common mock sequences are written once, used many times
+3. **Easier maintenance** - If function behavior changes, update the wrapper, not every test
+4. **Consistent expectations** - Reduces risk of missing or incorrect mock setup in tests
+
+**Basic wrapper pattern:**
 
 ```c
 // Wrapper sets up expectations AND calls real function
@@ -87,6 +98,81 @@ void test_circular_buffer_push_pop(void)
 {
     mock_circular_buffer_push(&test_buf, &item1);
     TEST_ASSERT_EQUAL(1, mock_circular_buffer_count(&test_buf));
+}
+```
+
+**Creating wrappers that follow branch logic:**
+
+When creating a mock wrapper, you must replicate the branch logic of the real function and set up expectations for each possible execution path:
+
+```c
+void *mock_linked_list_pop_head(linked_list_t *list, size_t *size)
+{
+    // Step 1: Handle NULL parameters (same as real function)
+    if (list == NULL || size == NULL) {
+        return linked_list_pop_head(list, size);  // No mocks needed - function returns early
+    }
+
+    // Step 2: Set up expectation for semaphore take (always happens)
+    xSemaphoreTake_ExpectAndReturn(list->mutex, portMAX_DELAY, pdTRUE);
+
+    // Step 3: Handle empty list branch (function checks list->count == 0)
+    if (list->count == 0) {
+        xSemaphoreGive_ExpectAndReturn(list->mutex, pdTRUE);  // Give happens before early return
+        return linked_list_pop_head(list, size);
+    }
+
+    // Step 4: Normal path - node will be freed
+    heap_caps_free_ExpectAnyArgs();
+    xSemaphoreGive_ExpectAndReturn(list->mutex, pdTRUE);
+    return linked_list_pop_head(list, size);
+}
+```
+
+**Key principles for wrapper creation:**
+
+1. **Mirror the function's control flow** - If the real function has `if (count == 0) { return NULL; }`, your wrapper must set up mocks for that path
+2. **Set expectations before calling the real function** - CMock needs expectations set up before the real function runs
+3. **Handle error paths** - NULL parameters, empty buffers, full buffers, etc.
+4. **Use `ExpectAnyArgs()` when the specific value doesn't matter** - e.g., for `free()` calls
+
+**Example: Wrapper for a function with multiple failure modes:**
+
+```c
+bool mock_linked_list_enqueue(linked_list_t *list, const void *data, size_t size)
+{
+    // Handle parameter validation (real function returns false for these)
+    if (list == NULL || data == NULL || size == 0) {
+        return linked_list_enqueue(list, data, size);
+    }
+
+    // Normal path: semaphore take succeeds
+    xSemaphoreTake_ExpectAndReturn(list->mutex, portMAX_DELAY, pdTRUE);
+
+    // Malloc is called (provide real memory so function can dereference)
+    linked_list_node_t *real_node = malloc(sizeof(linked_list_node_t));
+    heap_caps_malloc_ExpectAndReturn(sizeof(linked_list_node_t), MALLOC_CAP_SPIRAM, real_node);
+
+    // Semaphore give (always called after successful operations)
+    xSemaphoreGive_ExpectAndReturn(list->mutex, pdTRUE);
+
+    return linked_list_enqueue(list, data, size);
+}
+
+// For testing malloc failure, set up expectations directly in the test:
+void test_enqueue_malloc_failure(void)
+{
+    linked_list_t list;
+    mock_linked_list_create(&list, 10);
+
+    xSemaphoreTake_ExpectAndReturn(list.mutex, portMAX_DELAY, pdTRUE);
+    heap_caps_malloc_ExpectAndReturn(sizeof(linked_list_node_t), MALLOC_CAP_SPIRAM, NULL);
+    xSemaphoreGive_ExpectAndReturn(list.mutex, pdTRUE);
+
+    test_item_t item = {42, "test"};
+    TEST_ASSERT_FALSE(linked_list_enqueue(&list, &item, sizeof(item)));
+
+    mock_linked_list_destroy(&list);
 }
 ```
 

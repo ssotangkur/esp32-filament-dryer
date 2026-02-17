@@ -7,6 +7,22 @@
 #include "freertos/semphr.h"
 
 /**
+ * @brief Subscriber callback type for circular buffer notifications
+ * @param data Pointer to the data array
+ * @param count Number of elements in the data array
+ * @param user_data User-provided data pointer
+ */
+typedef void (*circular_buffer_subscriber_cb_t)(const void *data, size_t count, void *user_data);
+
+/**
+ * @brief Subscriber structure for circular buffer
+ */
+typedef struct {
+  circular_buffer_subscriber_cb_t callback;
+  void *user_data;
+} circular_buffer_subscriber_t;
+
+/**
  * @brief Generic circular buffer structure
  */
 typedef struct
@@ -17,6 +33,8 @@ typedef struct
   size_t head;             // Write index
   size_t count;            // Number of valid elements
   SemaphoreHandle_t mutex; // Thread safety mutex
+  circular_buffer_subscriber_t *subscribers;
+  size_t subscriber_count;
 } circular_buffer_t;
 
 /**
@@ -85,3 +103,29 @@ void circular_buffer_clear(circular_buffer_t *cb);
  * @param cb Pointer to circular_buffer_t structure
  */
 void circular_buffer_free(circular_buffer_t *cb);
+
+/**
+ * @brief Subscribe to circular buffer notifications
+ * @param cb Pointer to circular_buffer_t structure
+ * @param callback Function to call with buffer data
+ * @param user_data User data to pass to callback
+ * @return true on success, false on failure
+ */
+bool circular_buffer_subscribe(circular_buffer_t *cb, circular_buffer_subscriber_cb_t callback, void *user_data);
+
+/**
+ * @brief Unsubscribe from circular buffer notifications
+ * @param cb Pointer to circular_buffer_t structure
+ * @param user_data User data that was used for subscription
+ * @return true on success, false if subscriber not found
+ */
+bool circular_buffer_unsubscribe(circular_buffer_t *cb, void *user_data);
+
+/**
+ * @brief Iterate through all elements in the circular buffer
+ * @param cb Pointer to circular_buffer_t structure
+ * @param callback Function to call for each element (return false to stop iteration)
+ * @param user_data User data to pass to callback
+ * @return true if all elements were iterated, false if callback returned false
+ */
+bool circular_buffer_iterate(circular_buffer_t *cb, bool (*callback)(size_t index, const void *data, void *user_data), void *user_data);
