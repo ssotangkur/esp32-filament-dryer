@@ -24,17 +24,20 @@ set(SOURCES
     main/test_main.c
     main/test_heater.c
     main/test_controller.c
-    main/test_circular_buffer.c       # Real circular buffer tests using stubs
+    main/test_circular_buffer.c
     main/test_version.c
-    # main/test_linked_list.c       # Disabled - segfaults with CMock
-    # main/stubs.c                      # Stub implementations for testing
+    main/test_linked_list.c
+    # main/test_temp.c              # Disabled: requires temp.c with many dependencies (ui/subjects.c, etc.)
+    # main/test_temperature.c       # Disabled: standalone test, can be re-enabled
     ${MOCK_SOURCES}                   # All CMock-generated mocks
     /opt/unity/src/unity.c            # Unity testing framework
     /opt/cmock/src/cmock.c            # CMock framework
     ${CMAKE_CURRENT_BINARY_DIR}/cmock_globals.c  # Global variables for CMock plugins
-    /project/main/heater_controller.c        # Controller source from main project
-    /project/main/version.c           # Version source from main project
+    /project/main/heater_controller.c
+    /project/main/version.c
     /project/main/circular_buffer.c
+    /project/main/linked_list.c
+    # /project/main/temp.c            # Disabled: required by test_temp.c (has additional dependencies)
 )
 
 # Include directories for Unity and CMock

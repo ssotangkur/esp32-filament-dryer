@@ -102,10 +102,9 @@ set(SOURCES
 
 ### Patterns to Avoid
 
-1. **DON'T use test_stubs.h** - Conflicts with CMock
-2. **DON'T call Mockmock_*_Init() or Mockmock_*_Verify()** - CMock handles this automatically
-3. **DON'T use internal functions** like `*_CMockExpectAndReturn` - Use public `_ExpectAndReturn` macros
-4. **DON'T mix mock wrappers and real function calls** - Use only the mock wrapper
+1. **DON'T call Mockmock_*_Init() or Mockmock_*_Verify()** - CMock handles this automatically
+2. **DON'T use internal functions** like `*_CMockExpectAndReturn` - Use public `_ExpectAndReturn` macros
+3. **DON'T mix mock wrappers and real function calls** - Use only the mock wrapper
 
 ## Troubleshooting
 
