@@ -306,13 +306,13 @@ Heater buffer message:
 7. [x] Add linked list tests: `docker_tests/unit_tests/main/test_linked_list.c` - **COMMITTED (25 tests)**
 8. [x] Add linked list test file to `docker_tests/unit_tests/CMakeLists.txt` - **COMMITTED**
 9. [x] Run linked list tests: `.\run_unit_tests.bat` - **ALL TESTS PASSING**
-10. [ ] Add linked list to ESP32 build: add `main/linked_list.c` to `main/CMakeLists.txt` - **TODO**
-11. [ ] Update `web_websocket.c` to subscribe to circular buffers, use linked list, and implement send task with semaphore - **TODO**
-12. [ ] Build and test ESP32 - **TODO**
+10. [x] Add linked list to ESP32 build: auto-included by GLOB_RECURSE - **COMMITTED**
+11. [x] Update `web_websocket.c` to subscribe to circular buffers, use linked list, and implement send task with semaphore - **COMMITTED**
+12. [x] Build and test ESP32 - **COMMITTED (build successful)**
 13. [x] Create `useAggregatedData.js` hook - **COMMITTED**
 14. [x] Update `App.jsx` for data collection and granularity - **COMMITTED**
-15. [ ] Build and test web application - **TODO**
-16. [ ] Verify end-to-end functionality - **TODO**
+15. [x] Build and test web application - **COMMITTED (built into LittleFS image)**
+16. [ ] Verify end-to-end functionality - **TODO (requires device flash and testing)**
 
 ---
 
@@ -328,13 +328,19 @@ Heater buffer message:
 - ✅ Web aggregation hook (`web/src/hooks/useAggregatedData.js`)
 - ✅ Web App.jsx with granularity selector and data accumulation
 - ✅ Mock wrapper pattern documentation (`DOCKER_TESTING_README.md`)
+- ✅ WebSocket handler updated (`main/web/web_websocket.c`)
+  - Subscribes to air and heater temperature buffers on connection
+  - Sends historical data in chunks (100 readings per message)
+  - Uses linked list for pending messages with PSRAM allocation
+  - Send task with semaphore for efficient sleep/wake
+  - Proper cleanup on disconnect
+- ✅ Firmware build successful with web app embedded in LittleFS
 - ✅ All 60 unit tests passing
 
 **Remaining work:**
-- ❌ Add linked_list.c to ESP32 build (main/CMakeLists.txt)
-- ❌ Update `web_websocket.c` to use subscriber system and linked list
-- ❌ Build and test ESP32 firmware
-- ❌ End-to-end testing with real device
+- ❌ Flash firmware to device and test end-to-end functionality
+- ❌ Verify WebSocket data streaming with historical + real-time data
+- ❌ Test granularity switching in browser
 
 ---
 
