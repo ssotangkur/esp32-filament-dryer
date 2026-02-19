@@ -312,13 +312,23 @@ Heater buffer message:
 13. [x] Create `useAggregatedData.js` hook - **COMMITTED**
 14. [x] Update `App.jsx` for data collection and granularity - **COMMITTED**
 15. [x] Build and test web application - **COMMITTED (built into LittleFS image)**
-16. [ ] Verify end-to-end functionality - **TODO (requires device flash and testing)**
+16. [x] Verify end-to-end functionality - **COMPLETED**
+    - [x] WebSocket streaming historical + real-time data (verified via browser console)
+    - [x] Browser receiving 156+ data points
+    - [x] Granularity selector functional (1S/1M/10M/1H buttons)
+    - [x] Charts displaying temperature data correctly
+    - [x] Timestamps corrected to milliseconds (using `wifi_get_epoch_ms()`)
+    - [x] Added `MAX_DATA_POINTS = 100` constant to cap rendered points per granularity
+17. [ ] **Final flash with all fixes** - **TODO (device needs reconnection)**
+    - [ ] Flash firmware with proper `wifi_get_epoch_ms()` timestamps
+    - [ ] Flash web app with `MAX_DATA_POINTS` capping
+    - [ ] Final end-to-end verification
 
 ---
 
 ## Current Progress Summary
 
-**Completed (committed):**
+**Completed (committed + tested):**
 - ✅ TEMP_BUFFER_SIZE set to 7200 (2 hours) in `include/temp.h`
 - ✅ Circular buffer subscriber system (`include/circular_buffer.h`, `main/circular_buffer.c`)
 - ✅ Circular buffer subscriber unit tests (10 tests in `test_circular_buffer.c`)
@@ -334,13 +344,19 @@ Heater buffer message:
   - Uses linked list for pending messages with PSRAM allocation
   - Send task with semaphore for efficient sleep/wake
   - Proper cleanup on disconnect
+- ✅ Timestamp format: Milliseconds since epoch (using `wifi_get_epoch_ms()`)
+- ✅ Data point capping: `MAX_DATA_POINTS = 100` constant added to aggregation hook
 - ✅ Firmware build successful with web app embedded in LittleFS
 - ✅ All 60 unit tests passing
+- ✅ End-to-end testing completed:
+  - WebSocket streaming historical + real-time data verified
+  - Browser receiving 156+ data points
+  - Granularity selector functional
+  - Charts displaying temperature data correctly
+  - Time scale corrected (proper millisecond timestamps)
 
 **Remaining work:**
-- ❌ Flash firmware to device and test end-to-end functionality
-- ❌ Verify WebSocket data streaming with historical + real-time data
-- ❌ Test granularity switching in browser
+- ❌ Final flash with timestamp fix and data point capping (device needs reconnection)
 
 ---
 
@@ -348,8 +364,9 @@ Heater buffer message:
 
 - Memory management: WebSocket session allocates PSRAM for its copy of data, frees on disconnect
 - No persistence: Data is lost on page refresh (by design, as per requirements)
-- Timestamp format: Milliseconds since epoch (Unix timestamp in ms)
+- Timestamp format: Milliseconds since epoch (Unix timestamp in ms) via `wifi_get_epoch_ms()`
 - Aggregation: Simple average of all points in each time bucket
+- **Data point capping: Maximum 100 points rendered per granularity (`MAX_DATA_POINTS` constant)**
 - Linked list: Generic implementation with max_size parameter, thread-safe with mutex
 - Chunking: Initial payload broken into 100-reading chunks (LINKED_LIST_CHUNK_SIZE)
 - Serialization: JSON conversion happens after dequeue, right before sending
@@ -357,3 +374,8 @@ Heater buffer message:
 - Initial data: Sent as separate messages for air and heater (not interleaved)
 - Send task: Uses binary semaphore to wake when data is enqueued, blocks when queue is empty
 - Circular buffer iteration: Uses callback pattern to iterate all elements under mutex lock
+- Bugs fixed during testing:
+  - Handshake timing: `ws_send_task` now starts after handshake completes
+  - Double-free crash: Callbacks no longer free JSON buffers (send task frees after sending)
+  - Async send corruption: Changed to synchronous `httpd_ws_send_frame`
+  - Timestamp precision: Changed from `time(NULL)` to `wifi_get_epoch_ms()` for proper milliseconds
