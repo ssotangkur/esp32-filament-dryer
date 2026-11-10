@@ -43,9 +43,12 @@ static void air_buffer_callback(const void *data, size_t count, void *user_data)
     return;
   }
 
+  ESP_LOGI(TAG, "air_buffer_callback: received %d samples", count);
+
   const temp_sample_t *samples = (const temp_sample_t *)data;
 
   size_t chunk_size = LINKED_LIST_CHUNK_SIZE;
+  size_t chunks_sent = 0;
   for (size_t offset = 0; offset < count; offset += chunk_size)
   {
     size_t remaining = count - offset;
@@ -75,13 +78,22 @@ static void air_buffer_callback(const void *data, size_t count, void *user_data)
 
     pos += snprintf(json_buf + pos, 4096 - pos, "]");
 
-    if (linked_list_enqueue(&sess->pending_msgs, json_buf, strlen(json_buf) + 1))
+    bool enqueued = linked_list_enqueue(&sess->pending_msgs, json_buf, strlen(json_buf) + 1);
+    ESP_LOGI(TAG, "air chunk %d: enqueued=%d, len=%d", chunks_sent, enqueued, pos);
+    
+    if (enqueued)
     {
       xSemaphoreGive(sess->send_sem);
+      // json_buf will be freed by ws_send_task after sending
     }
-
-    heap_caps_free(json_buf);
+    else
+    {
+      ESP_LOGE(TAG, "air_buffer_callback: failed to enqueue, freeing buffer");
+      heap_caps_free(json_buf);
+    }
+    chunks_sent++;
   }
+  ESP_LOGI(TAG, "air_buffer_callback: sent %d chunks total", chunks_sent);
 }
 
 static void heater_buffer_callback(const void *data, size_t count, void *user_data)
@@ -92,9 +104,12 @@ static void heater_buffer_callback(const void *data, size_t count, void *user_da
     return;
   }
 
+  ESP_LOGI(TAG, "heater_buffer_callback: received %d samples", count);
+
   const temp_sample_t *samples = (const temp_sample_t *)data;
 
   size_t chunk_size = LINKED_LIST_CHUNK_SIZE;
+  size_t chunks_sent = 0;
   for (size_t offset = 0; offset < count; offset += chunk_size)
   {
     size_t remaining = count - offset;
@@ -124,13 +139,22 @@ static void heater_buffer_callback(const void *data, size_t count, void *user_da
 
     pos += snprintf(json_buf + pos, 4096 - pos, "]");
 
-    if (linked_list_enqueue(&sess->pending_msgs, json_buf, strlen(json_buf) + 1))
+    bool enqueued = linked_list_enqueue(&sess->pending_msgs, json_buf, strlen(json_buf) + 1);
+    ESP_LOGI(TAG, "heater chunk %d: enqueued=%d, len=%d", chunks_sent, enqueued, pos);
+    
+    if (enqueued)
     {
       xSemaphoreGive(sess->send_sem);
+      // json_buf will be freed by ws_send_task after sending
     }
-
-    heap_caps_free(json_buf);
+    else
+    {
+      ESP_LOGE(TAG, "heater_buffer_callback: failed to enqueue, freeing buffer");
+      heap_caps_free(json_buf);
+    }
+    chunks_sent++;
   }
+  ESP_LOGI(TAG, "heater_buffer_callback: sent %d chunks total", chunks_sent);
 }
 
 static void ws_send_task(void *arg)
@@ -151,6 +175,9 @@ static void ws_send_task(void *arg)
       break;
     }
 
+    ESP_LOGI(TAG, "ws_send_task: woke up, queue size=%d", linked_list_count(&sess->pending_msgs));
+
+    size_t msgs_sent = 0;
     while (linked_list_count(&sess->pending_msgs) > 0)
     {
       char *json_buf;
@@ -159,8 +186,11 @@ static void ws_send_task(void *arg)
       json_buf = linked_list_pop_head(&sess->pending_msgs, &msg_size);
       if (json_buf == NULL)
       {
+        ESP_LOGW(TAG, "ws_send_task: pop_head returned NULL despite count > 0");
         break;
       }
+
+      ESP_LOGI(TAG, "ws_send_task: sending message %d, len=%d", msgs_sent, msg_size);
 
       httpd_ws_frame_t ws_resp = {
           .final = true,
@@ -169,9 +199,18 @@ static void ws_send_task(void *arg)
           .payload = (uint8_t *)json_buf,
           .len = strlen(json_buf)};
 
-      httpd_ws_send_frame_async(server, sess->sockfd, &ws_resp);
+      esp_err_t ret = httpd_ws_send_frame_async(server, sess->sockfd, &ws_resp);
+      if (ret != ESP_OK)
+      {
+        ESP_LOGE(TAG, "ws_send_task: failed to send message %d: %s", msgs_sent, esp_err_to_name(ret));
+        heap_caps_free(json_buf);
+        break;
+      }
+      ESP_LOGI(TAG, "ws_send_task: message %d sent successfully", msgs_sent);
       heap_caps_free(json_buf);
+      msgs_sent++;
     }
+    ESP_LOGI(TAG, "ws_send_task: sent %d messages total", msgs_sent);
   }
 
   ESP_LOGI(TAG, "ws_send_task: exiting for session %p", (void *)sess);
@@ -409,6 +448,26 @@ esp_err_t sensor_data_handler(httpd_req_t *req)
   {
     sess->handshake_complete = true;
     ESP_LOGI(TAG, "WebSocket handshake confirmed for fd=%d", sess->sockfd);
+    
+    // Now that handshake is complete, start the send task and subscribe to buffers
+    if (!sess->running)
+    {
+      sess->running = true;
+      
+      BaseType_t task_ret = xTaskCreate(ws_send_task, "ws_send", WS_SEND_TASK_STACK_SIZE,
+                                        sess, WS_SEND_TASK_PRIORITY, &sess->send_task_handle);
+      if (task_ret != pdPASS)
+      {
+        ESP_LOGE(TAG, "Failed to create send task");
+        sess->running = false;
+      }
+      else
+      {
+        circular_buffer_subscribe(temp_sensor_get_air_buffer(), air_buffer_callback, sess);
+        circular_buffer_subscribe(temp_sensor_get_heater_buffer(), heater_buffer_callback, sess);
+        ESP_LOGI(TAG, "Session %p subscribed to temperature buffers", (void *)sess);
+      }
+    }
   }
 
   if (ws_pkt.type == HTTPD_WS_TYPE_CLOSE)

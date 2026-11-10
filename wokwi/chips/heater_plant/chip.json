@@ -1,0 +1,19 @@
+{
+  "name": "heater-plant",
+  "author": "filament-dryer",
+  "pins": ["PWM_IN", "ADC_AIR", "ADC_HEATER", "GND"],
+  "attributes": {
+    "pMaxW": 60,
+    "cHeater": 8,
+    "cAir": 120,
+    "kHeaterToAir": 1.2,
+    "kAirToAmb": 0.4,
+    "tAmb": 25,
+    "timestepMs": 10,
+    "seed": 1,
+    "rSeries": 100000,
+    "vRef": 3.3,
+    "attenMaxV": 2.2,
+    "sigmaCounts": 8
+  }
+}

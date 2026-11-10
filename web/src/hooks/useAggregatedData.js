@@ -1,11 +1,24 @@
 import { useMemo } from 'react';
 
+const MAX_DATA_POINTS = 100;
+
 const SECOND_MS = 1000;
 const MINUTE_MS = 60 * SECOND_MS;
 const HOUR_MS = 60 * MINUTE_MS;
 
 function aggregateBySecond(data) {
-  return data;
+  if (!data || data.length === 0) return [];
+  
+  if (data.length <= MAX_DATA_POINTS) {
+    return data;
+  }
+  
+  const step = Math.ceil(data.length / MAX_DATA_POINTS);
+  const result = [];
+  for (let i = data.length - 1; i >= 0 && result.length < MAX_DATA_POINTS; i -= step) {
+    result.unshift(data[i]);
+  }
+  return result;
 }
 
 function aggregateByMinute(data) {
@@ -33,7 +46,18 @@ function aggregateByMinute(data) {
     });
   });
 
-  return result.sort((a, b) => a.x - b.x);
+  const sorted = result.sort((a, b) => a.x - b.x);
+  
+  if (sorted.length <= MAX_DATA_POINTS) {
+    return sorted;
+  }
+  
+  const step = Math.ceil(sorted.length / MAX_DATA_POINTS);
+  const capped = [];
+  for (let i = sorted.length - 1; i >= 0 && capped.length < MAX_DATA_POINTS; i -= step) {
+    capped.unshift(sorted[i]);
+  }
+  return capped;
 }
 
 function aggregateBy10Min(data) {
@@ -62,7 +86,18 @@ function aggregateBy10Min(data) {
     });
   });
 
-  return result.sort((a, b) => a.x - b.x);
+  const sorted = result.sort((a, b) => a.x - b.x);
+  
+  if (sorted.length <= MAX_DATA_POINTS) {
+    return sorted;
+  }
+  
+  const step = Math.ceil(sorted.length / MAX_DATA_POINTS);
+  const capped = [];
+  for (let i = sorted.length - 1; i >= 0 && capped.length < MAX_DATA_POINTS; i -= step) {
+    capped.unshift(sorted[i]);
+  }
+  return capped;
 }
 
 function aggregateByHour(data) {
@@ -90,7 +125,18 @@ function aggregateByHour(data) {
     });
   });
 
-  return result.sort((a, b) => a.x - b.x);
+  const sorted = result.sort((a, b) => a.x - b.x);
+  
+  if (sorted.length <= MAX_DATA_POINTS) {
+    return sorted;
+  }
+  
+  const step = Math.ceil(sorted.length / MAX_DATA_POINTS);
+  const capped = [];
+  for (let i = sorted.length - 1; i >= 0 && capped.length < MAX_DATA_POINTS; i -= step) {
+    capped.unshift(sorted[i]);
+  }
+  return capped;
 }
 
 export function useAggregatedData(data, granularity) {

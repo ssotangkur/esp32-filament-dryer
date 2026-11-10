@@ -2,7 +2,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
-#include <time.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
@@ -16,6 +15,7 @@
 #include "circular_buffer.h"
 #include "temp.h"
 #include "ui/subjects.h"
+#include "wifi.h"
 
 static const char *TAG = "TEMP";
 
@@ -256,7 +256,7 @@ static void temp_task(void *pvParameters)
             .temperature = temperature,
             .voltage = voltage,
             .resistance = resistance,
-            .timestamp = (uint32_t)time(NULL)};
+            .timestamp = wifi_get_epoch_ms()};
 
         // Store in buffer
         circular_buffer_push(sensor_handle->buffer, &sample);

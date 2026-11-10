@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "author": "filament-dryer",
+  "editor": "wokwi",
+  "parts": [
+    { "type": "board-esp32-s3-devkitc-1", "id": "esp", "top": 0, "left": 0, "attrs": {} },
+    {
+      "type": "chip-heater-plant",
+      "id": "plant",
+      "top": 200,
+      "left": 100,
+      "attrs": {
+        "pMaxW": 60,
+        "cHeater": 8,
+        "cAir": 120,
+        "kHeaterToAir": 1.2,
+        "kAirToAmb": 0.4,
+        "tAmb": 25,
+        "timestepMs": 10,
+        "seed": 1
+      }
+    }
+  ],
+  "connections": [
+    ["esp:GPIO3", "plant:PWM_IN", ""],
+    ["plant:ADC_AIR", "esp:GPIO1", ""],
+    ["plant:ADC_HEATER", "esp:GPIO2", ""],
+    ["esp:GND", "plant:GND", ""]
+  ]
+}
